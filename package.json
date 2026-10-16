@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "preview": "npm run check-env && opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "npm run check-env && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "check-env": "node scripts/check-env-files.mjs"
+    "check-env": "node scripts/check-env-files.mjs",
+    "check-corpus": "node scripts/check-corpus.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.83",
