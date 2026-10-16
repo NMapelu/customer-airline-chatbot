@@ -15,6 +15,7 @@
     "fetch-corpus": "node scripts/fetch-corpus.mjs docs/public",
     "ingest": "tsx scripts/ingest.ts",
     "dev-user": "tsx scripts/dev-user.ts",
+    "eval": "tsx scripts/eval.ts",
     "test": "node --import tsx --test \"lib/**/*.test.ts\"",
     "test:integration": "node --import tsx --test --test-concurrency=1 \"tests/integration/*.test.ts\""
   },
