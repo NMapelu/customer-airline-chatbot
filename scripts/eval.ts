@@ -55,6 +55,9 @@ async function pool<T, R>(items: T[], size: number, work: (item: T, index: numbe
   return out;
 }
 
+// Text for a markdown table cell: escape backslashes first, then pipes, and keep it on one line.
+const cell = (text: string) => text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
 
 async function main() {
@@ -175,7 +178,7 @@ function report(questions: EvalQuestion[], results: EvalResult[]): string {
     lines.push('| ID | Question | Similarity | Reason |', '|----|----------|------------|--------|');
     for (const { q, r, v } of failures) {
       const sim = r.topSimilarity === null ? '' : r.topSimilarity.toFixed(3);
-      lines.push(`| ${q.id} | ${q.question.replace(/\|/g, '\\|')} | ${sim} | ${v.reason.replace(/\|/g, '\\|').replace(/\n/g, ' ')} |`);
+      lines.push(`| ${q.id} | ${cell(q.question)} | ${sim} | ${cell(v.reason)} |`);
     }
   }
   return `${lines.join('\n')}\n`;
