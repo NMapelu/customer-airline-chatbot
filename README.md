@@ -40,6 +40,8 @@ Server secrets live in `.dev.vars` locally and in Cloudflare secrets (`npx wrang
 | `npm run check-env` | Fail if any `.env*` file holds a secret that would be bundled |
 | `npm run fetch-corpus` | Download the KQ pages in `docs/sources.json` into `docs/public/` (not committed) |
 | `npm run check-corpus` | Check the front matter of every knowledge-base document |
+| `npm run ingest` | Load the knowledge base into Supabase (needs `.env.ingest`) |
+| `npm test` | Run the unit tests (Node's built-in test runner) |
 
 ## Database
 
@@ -60,6 +62,7 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 
 - `docs/sources.json` lists the 16 Kenya Airways pages the chatbot answers from. Their text is **fetched at ingest time and never committed**, because this repo is public. Fetched pages land in `docs/public/`, which git ignores, and from there go only into the private Supabase database.
 - `docs/staff/` holds 10 sample call-centre procedures written for this project. They are marked `illustrative: true` and are **not real Kenya Airways documents**. They describe how an agent applies the public policies, and don't add fees or limits of their own.
+- `npm run ingest` loads the knowledge base into Supabase. It fetches the KQ pages, runs the check, splits each document into chunks, embeds new or changed documents with OpenAI, and replaces each one's chunks in a single transaction. A second run with nothing changed reports everything as unchanged. Add `-- --dry-run` to see the plan without embedding anything, or `-- --skip-fetch` to reuse the pages already in `docs/public/`. It needs a `.env.ingest` file (copy `.env.ingest.example`). The Supabase service-role key lives only there, never in `.env.local`, `.dev.vars` or Cloudflare.
 - `npm run check-corpus` checks every document's front matter (audience, sources, dates). A document with a missing or wrong audience fails, so it can never be shown to the wrong users.
 
 ## Project management
