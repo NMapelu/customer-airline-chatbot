@@ -86,13 +86,12 @@ export async function POST(req: Request) {
   const model = openai(CHAT_MODEL);
 
   try {
-    // 4. Rewrite a follow-up into a standalone question.
-    const standalone = await rewriteQuestion(model, turns);
-
-    // 5. Scope check (R1).
-    if ((await checkScope(model, standalone)) === 'off_topic') {
+    // 5. Scope check (R1) on the user's own words, then 4. rewrite a follow-up for retrieval.
+    //    The check runs first because the rewrite could make an off-topic message look in scope.
+    if ((await checkScope(model, turns)) === 'off_topic') {
       return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
     }
+    const standalone = await rewriteQuestion(model, turns);
 
     // 6. Retrieval, under the user's own session and RLS.
     const chunks = await retrieve(supabase, openai.embedding(EMBEDDING_MODEL), standalone, TOP_K);
