@@ -1,0 +1,2 @@
+# Local secrets for `npm run preview` (Cloudflare Workers runtime). Copy to .dev.vars.
+OPENAI_API_KEY=
