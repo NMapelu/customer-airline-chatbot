@@ -73,8 +73,8 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 
 1. Check the user has an MFA-verified session and read their role from `app_metadata`.
 2. Mask anything that looks like a card, passport, phone number or booking reference (`pii.ts`).
-3. Turn a follow-up into a standalone question (`rewrite.ts`).
-4. Refuse questions that aren't about Kenya Airways policy (`scope.ts`). If the check fails, the question is refused.
+3. Refuse messages that aren't about Kenya Airways policy (`scope.ts`), judging the user's own words. If the check fails, the question is refused.
+4. Turn a follow-up into a standalone question for the search (`rewrite.ts`).
 5. Search the knowledge base with the user's own session, so RLS decides what they can see (`retrieve.ts`).
 6. If no passage is similar enough, reply with the KQ contact details instead of calling the model (`gate.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
 7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`).
