@@ -11,7 +11,8 @@
     "preview": "npm run check-env && opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "npm run check-env && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "check-env": "node scripts/check-env-files.mjs",
-    "check-corpus": "node scripts/check-corpus.mjs"
+    "check-corpus": "node scripts/check-corpus.mjs",
+    "fetch-corpus": "node scripts/fetch-corpus.mjs docs/public"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.83",
@@ -32,7 +33,10 @@
     "eslint-config-next": "16.3.8",
     "supabase": "^2.120.0",
     "tailwindcss": "^4",
+    "turndown": "7.2.4",
+    "turndown-plugin-gfm": "1.0.2",
     "typescript": "^5",
+    "unpdf": "1.8.1",
     "wrangler": "^4.151.0"
   },
   "engines": {

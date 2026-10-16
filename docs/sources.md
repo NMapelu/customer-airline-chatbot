@@ -91,3 +91,11 @@ This document lists the official Kenya Airways policy pages used to build the RA
 
 - **Travel Insurance**
   No official KQ page found on 2026-10-16. Until one is found, the chatbot treats this as out of scope and refers customers to KQ contact channels.
+
+## Not fetched yet
+
+`docs/sources.json` is the list the fetch script uses. These pages are left out of it for now:
+
+- **Pride of Africa Service Charter:** the PDF link redirects to the home page, and no replacement has been found.
+- **Customer Help** and both **Asante Rewards** pages: their text is rendered by JavaScript, so a plain download gets an empty page.
+- **Travel insurance:** KQ has no page for it, so the chatbot treats it as out of scope.
