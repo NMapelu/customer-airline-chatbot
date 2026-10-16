@@ -46,3 +46,7 @@ next-env.d.ts
 .wrangler/
 .dev.vars*
 !.dev.vars.example
+
+# KQ policy pages are fetched at ingest time and never committed (the repo is public)
+docs/public/*
+!docs/public/.gitkeep
