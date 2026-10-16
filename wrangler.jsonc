@@ -1,0 +1,18 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "kq-policy-assistant",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	// Serve only the main workers.dev URL. Per-version preview URLs stay off so old builds aren't publicly reachable.
+	"workers_dev": true,
+	"preview_urls": false,
+	"observability": {
+		"enabled": true
+	}
+	// Secrets (OPENAI_API_KEY, ...) are set with `npx wrangler secret put <NAME>`, never here.
+}
