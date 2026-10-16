@@ -1,23 +1,123 @@
-import { streamText, convertToModelMessages, type UIMessage } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { getServerEnv } from '@/lib/env';
+import { createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream, type ToolSet } from 'ai';
+import { z } from 'zod';
+import { getChatSession } from '@/lib/chat-session';
+import { sourcesFrom, streamAnswer } from '@/lib/rag/answer';
+import { CHAT_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD, TOP_K } from '@/lib/rag/config';
+import { getContactDetails } from '@/lib/rag/contact';
+import { applyGate } from '@/lib/rag/gate';
+import { maskPii } from '@/lib/rag/pii';
+import { escalationText, REFUSAL_TEXT } from '@/lib/rag/prompts';
+import { retrieve } from '@/lib/rag/retrieve';
+import { rewriteQuestion } from '@/lib/rag/rewrite';
+import { checkScope } from '@/lib/rag/scope';
+import type { ChatMessage, ChatMetadata, Turn } from '@/lib/rag/types';
 
 export const maxDuration = 30;
 
-export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
-  const openai = createOpenAI({ apiKey: getServerEnv().OPENAI_API_KEY });
+// Only roles and text are read from the request; everything else is ignored.
+const bodySchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        parts: z.array(z.looseObject({ type: z.string(), text: z.string().optional() })).max(50),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
 
-  const result = streamText({
-    model: openai('gpt-4o-mini'),
-    system:
-      'You are a helpful airline travel assistant. Help with bookings, baggage, seats, cancellations, refunds, and airline queries.',
-    messages: await convertToModelMessages(messages),
-    // Full details go to the server log (`npx wrangler tail`); the browser only gets a generic message.
-    onError({ error }) {
-      console.error('chat stream failed', error);
+const textOf = (parts: { type: string; text?: string }[]) =>
+  parts
+    .filter((p) => p.type === 'text')
+    .map((p) => p.text ?? '')
+    .join('');
+
+// A fixed reply (refusal or escalation) streamed like a normal answer, without calling the model.
+function fixedReply(text: string, metadata: ChatMetadata) {
+  const stream = createUIMessageStream<ChatMessage>({
+    execute({ writer }) {
+      writer.write({ type: 'start', messageMetadata: metadata });
+      writer.write({ type: 'text-start', id: 'reply' });
+      writer.write({ type: 'text-delta', id: 'reply', delta: text });
+      writer.write({ type: 'text-end', id: 'reply' });
+      writer.write({ type: 'finish' });
     },
   });
+  return createUIMessageStreamResponse({ stream });
+}
 
-  return result.toUIMessageStreamResponse();
+const jsonError = (status: number, error: string) => Response.json({ error }, { status });
+
+// Request lifecycle, overview §8.2 steps 3–8. Saving to history (step 9) arrives in Phase 8.
+export async function POST(req: Request) {
+  // 3. Who is asking. No MFA-verified session, no chat.
+  let session;
+  try {
+    session = await getChatSession();
+  } catch (error) {
+    console.error('could not create the chat session', error);
+    return jsonError(503, 'The chat is not available right now.');
+  }
+  if (!session) return jsonError(401, 'Please sign in to use the chat.');
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return jsonError(400, 'Invalid request.');
+  const recent = parsed.data.messages.slice(-(HISTORY_TURNS * 2));
+  const latest = recent.at(-1);
+  if (!latest || latest.role !== 'user') return jsonError(400, 'Invalid request.');
+  const question = textOf(latest.parts).trim();
+  if (!question) return jsonError(400, 'Please type a question.');
+  if (question.length > MAX_QUESTION_CHARS) {
+    return jsonError(413, `Please keep your question under ${MAX_QUESTION_CHARS} characters.`);
+  }
+
+  // R7: mask personal details in everything that goes to OpenAI.
+  let piiMasked = false;
+  const turns: Turn[] = recent.map((m) => {
+    const { text, found } = maskPii(textOf(m.parts).slice(0, 4000));
+    if (m === latest && found.length > 0) piiMasked = true;
+    return { role: m.role, text };
+  });
+
+  const { env, supabase, role } = session;
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  const model = openai(CHAT_MODEL);
+
+  try {
+    // 4. Rewrite a follow-up into a standalone question.
+    const standalone = await rewriteQuestion(model, turns);
+
+    // 5. Scope check (R1).
+    if ((await checkScope(model, standalone)) === 'off_topic') {
+      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+    }
+
+    // 6. Retrieval, under the user's own session and RLS.
+    const chunks = await retrieve(supabase, openai.embedding(EMBEDDING_MODEL), standalone, TOP_K);
+
+    // 7. Confidence gate (R2) and the staff-content check (§10.11).
+    const gate = applyGate(chunks, role, SIMILARITY_THRESHOLD);
+    if (gate.kind !== 'answer') {
+      if (gate.kind === 'blocked_staff') {
+        console.error('blocked staff content from reaching a customer', { chunkIds: gate.chunkIds });
+      }
+      const contact = await getContactDetails(supabase);
+      return fixedReply(escalationText(role, contact), { kind: 'escalation', piiMasked });
+    }
+
+    // 8. Grounded answer, with its sources attached as message metadata (R4).
+    const metadata: ChatMetadata = { kind: 'answer', sources: sourcesFrom(gate.chunks), piiMasked };
+    const result = streamAnswer(model, role, gate.chunks, turns);
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream<ToolSet, ChatMessage>({
+        stream: result.stream,
+        messageMetadata: ({ part }) => (part.type === 'start' ? metadata : undefined),
+      }),
+    });
+  } catch (error) {
+    console.error('chat request failed', error);
+    return jsonError(500, 'Sorry, something went wrong. Please try again.');
+  }
 }
