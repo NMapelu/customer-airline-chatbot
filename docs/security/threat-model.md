@@ -47,7 +47,7 @@ The ingestion job and deployments run in GitHub Actions.
 | R1 | Repudiation | User denies deleting data or changing MFA | Append-only audit log | 10.10 | Planned (Phase 10) |
 | I1 | Information disclosure | User reads another user's conversations | RLS on every table, tested | 10.2 | Planned (Phase 3) |
 | I2 | Information disclosure | Customer receives staff procedures | Audience RLS on corpus, post-retrieval guard, leakage tests | 10.11 | Planned (Phase 3, 9) |
-| I3 | Information disclosure | API key committed or exposed to browser | Keys server-only, `.env*` ignored, env validation, Gitleaks and push protection | 10.3 | In progress (Phase 1) |
+| I3 | Information disclosure | API key committed, exposed to the browser, or baked into the Worker bundle | Keys server-only in Cloudflare secrets / `.dev.vars`, `.env*` ignored, `check-env` guard before every Cloudflare build, env validation, Gitleaks and push protection | 10.3 | In progress (Phase 2) |
 | I4 | Information disclosure | Personal data sent to OpenAI | PII masking, user guidance, privacy notice | R7, 11 | Planned (Phase 6, 10) |
 | I5 | Information disclosure | Model invents fees or rules | Retrieval grounding, confidence gate, citations, evaluation set | 6, 13 | Planned (Phase 6, 7) |
 | D1 | Denial of service | Flooding `/api/chat` to run up OpenAI cost | Rate limits, length limits, OpenAI budget cap | 10.8 | Partly done (budget cap) |
@@ -58,3 +58,4 @@ The ingestion job and deployments run in GitHub Actions.
 | Date | Phase | Changes |
 |------|-------|---------|
 | 2026-10-16 | 1 | First version |
+| 2026-10-16 | 2 | I3: OpenNext copies `.env*` values into the Worker bundle; secrets moved to Cloudflare bindings and a pre-build guard added |
