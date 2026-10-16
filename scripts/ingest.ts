@@ -15,6 +15,7 @@ import { embedMany } from 'ai';
 import { z } from 'zod';
 import { chunkMarkdown } from '../lib/rag/chunk';
 import { type Audience, type KbDocument, parseDocument, planIngest } from '../lib/rag/documents';
+import { supabaseUrlSchema } from '../lib/supabase/url';
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const args = new Set(process.argv.slice(2));
@@ -26,15 +27,21 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function run(command: string, commandArgs: string[], what: string) {
-  const result = spawnSync(command, commandArgs, { stdio: 'inherit', shell: process.platform === 'win32' });
+// Runs a helper script with the same Node binary, so no shell is needed on any platform.
+function run(script: string, scriptArgs: string[], what: string) {
+  const result = spawnSync(process.execPath, [script, ...scriptArgs], { stdio: 'inherit' });
   if (result.status !== 0) fail(`${what} failed, so nothing was loaded.`);
 }
 
 function loadEnv() {
-  if (existsSync('.env.ingest')) process.loadEnvFile('.env.ingest');
+  if (existsSync('.env.ingest')) {
+    process.loadEnvFile('.env.ingest');
+  } else {
+    const hint = existsSync('.env.ingest.txt') ? ' Notepad saved it as .env.ingest.txt: rename it to .env.ingest.' : '';
+    fail(`.env.ingest not found. Copy .env.ingest.example to .env.ingest and fill it in.${hint}`);
+  }
   const schema = z.object({
-    SUPABASE_URL: z.url({ error: 'must be your project URL, like https://<ref>.supabase.co' }),
+    SUPABASE_URL: supabaseUrlSchema,
     SUPABASE_SERVICE_ROLE_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
     OPENAI_API_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
   });
@@ -60,10 +67,10 @@ function readDocuments(): KbDocument[] {
 async function main() {
   // 1. Fetch KQ's pages. A failed fetch stops everything: loading a partial set would delete
   //    the missing pages from the database.
-  if (!skipFetch) run('node', ['scripts/fetch-corpus.mjs', 'docs/public'], 'Fetching the KQ pages');
+  if (!skipFetch) run('scripts/fetch-corpus.mjs', ['docs/public'], 'Fetching the KQ pages');
 
   // 2. Check every document. A missing or wrong audience stops the load (fail-safe).
-  run('node', ['scripts/check-corpus.mjs', '--require-public'], 'The knowledge-base check');
+  run('scripts/check-corpus.mjs', ['--require-public'], 'The knowledge-base check');
   const docs = readDocuments();
 
   if (dryRun) {
