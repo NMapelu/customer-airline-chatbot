@@ -50,6 +50,7 @@ The ingestion job and deployments run in GitHub Actions.
 | I3 | Information disclosure | API key committed, exposed to the browser, or baked into the Worker bundle | Keys server-only in Cloudflare secrets / `.dev.vars`, `.env*` ignored, `check-env` guard before every Cloudflare build, env validation, Gitleaks and push protection | 10.3 | In progress (Phase 2) |
 | I4 | Information disclosure | Personal data sent to OpenAI | PII masking, user guidance, privacy notice | R7, 11 | Planned (Phase 6, 10) |
 | I5 | Information disclosure | Model invents fees or rules | Retrieval grounding, confidence gate, citations, evaluation set | 6, 13 | Planned (Phase 6, 7) |
+| T3 | Tampering | Fetched KQ page text carries HTML or script into answers and source snippets | Fetch script drops script, style, form and nav elements from the parsed DOM; the chat UI must render markdown with raw HTML disabled | 10.4 | Partly done (Phase 4); rendering in Phase 7 |
 | D1 | Denial of service | Flooding `/api/chat` to run up OpenAI cost | Rate limits, length limits, OpenAI budget cap | 10.8 | Partly done (budget cap) |
 | E1 | Elevation of privilege | Compromised CI job gains deploy rights | Least-privilege workflow permissions, SHA-pinned actions, protected environments | 15.5 | In progress (Phase 1) |
 
@@ -60,3 +61,4 @@ The ingestion job and deployments run in GitHub Actions.
 | 2026-10-16 | 1 | First version |
 | 2026-10-16 | 2 | I3: OpenNext copies `.env*` values into the Worker bundle; secrets moved to Cloudflare bindings and a pre-build guard added |
 | 2026-10-16 | 3 | I1, I2: database RLS and grants in place and tested; a role in `user_metadata` is ignored |
+| 2026-10-16 | 4 | T3 added: KQ text is fetched at ingest (never committed, repo is public), and fetched markup must never be rendered as HTML |

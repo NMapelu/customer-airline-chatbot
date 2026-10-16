@@ -21,13 +21,18 @@ const MIN_WORDS = 50;
 const USER_AGENT = "Mozilla/5.0 (compatible; kq-policy-assistant corpus fetcher)";
 
 // Blocks that are never policy text: scripts, navigation, forms and promo panels.
-const DROP_TAGS = /<(script|style|noscript|svg|form|button|nav|aside|iframe)\b[\s\S]*?<\/\1>/gi;
-const DROP_CLASSES = /<div[^>]*class="[^"]*(panel--swoosh|breadcrumb|cookie|heroblock__image)[^"]*"[\s\S]*?<\/div>/gi;
+// They are dropped from the parsed DOM by turndown, not with regexes, so odd markup can't slip through.
+const DROP_TAGS = ["script", "style", "noscript", "svg", "form", "button", "nav", "aside", "iframe", "img", "picture", "video"];
+const DROP_CLASSES = /\b(panel--swoosh|breadcrumb|cookie|heroblock__image)/;
 
 function makeTurndown() {
   const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-", codeBlockStyle: "fenced" });
   td.use(gfm);
-  td.remove(["img", "picture", "video"]);
+  td.remove(DROP_TAGS);
+  td.addRule("dropPanels", {
+    filter: (node) => node.nodeType === 1 && DROP_CLASSES.test(node.getAttribute("class") ?? ""),
+    replacement: () => "",
+  });
   // Page headings become ## and ### only.
   td.addRule("headings", {
     filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
@@ -41,7 +46,10 @@ function makeTurndown() {
   td.addRule("tables", {
     filter: "table",
     replacement: (_content, node) => {
-      const cell = (c) => td.turndown(c.innerHTML).replace(/\s*\n+\s*/g, " ").replace(/\|/g, "\\|").trim();
+      // turndown has already escaped backslashes and other markdown characters (a\b becomes a\\b),
+      // so only "|" still needs escaping. Escaping backslashes again would double them.
+      const escapePipes = (md) => md.split("|").join("\\|");
+      const cell = (c) => escapePipes(td.turndown(c.innerHTML).replace(/\s*\n+\s*/g, " ")).trim();
       const isCell = (c) => c.nodeName === "TD" || c.nodeName === "TH";
       const rows = Array.from(node.getElementsByTagName("tr")).map((tr) => Array.from(tr.childNodes).filter(isCell).map(cell));
       if (!rows.length) return "";
@@ -54,7 +62,8 @@ function makeTurndown() {
 }
 
 function textOf(html) {
-  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  // Used only for the page title. Any "<" or ">" left after removing tags is dropped too.
+  return html.replace(/<[^>]+>/g, " ").replace(/[<>]/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
 // Return the page's policy body: the main column without hero image, sidebar or promo panels.
@@ -68,7 +77,6 @@ function mainHtml(html) {
   const col = body.indexOf("layout-withsidebar__main");
   const side = body.indexOf("layout-withsidebar__side");
   if (col >= 0) body = body.slice(body.indexOf(">", col) + 1, side > col ? side : undefined);
-  body = body.replace(DROP_TAGS, "").replace(DROP_CLASSES, "");
   // Accordion text sits inside <template> elements, which a DOM parser keeps out of the tree.
   body = body.replace(/<template\b[^>]*>/gi, "<div>").replace(/<\/template>/gi, "</div>");
   return { title, body };
