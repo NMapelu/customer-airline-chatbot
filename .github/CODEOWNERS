@@ -1,0 +1,7 @@
+# Every change needs review from the project owner.
+*               @NMapelu
+
+# Security-sensitive paths.
+/.github/       @NMapelu
+/supabase/      @NMapelu
+/docs/security/ @NMapelu
