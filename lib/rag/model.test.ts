@@ -27,14 +27,29 @@ const failing = () =>
 // The tests expect errors to be logged; keep the output readable.
 console.error = () => {};
 
+const ask = (text: string) => [{ role: 'user' as const, text }];
+
 test('scope check returns the model label', async () => {
-  assert.equal(await checkScope(replying('{"result":"in_scope"}'), 'How many bags?'), 'in_scope');
-  assert.equal(await checkScope(replying('{"result":"off_topic"}'), 'Who wins the league?'), 'off_topic');
+  assert.equal(await checkScope(replying('{"result":"in_scope"}'), ask('How many bags?')), 'in_scope');
+  assert.equal(await checkScope(replying('{"result":"off_topic"}'), ask('Who wins the league?')), 'off_topic');
 });
 
 test('scope check fails safe to off topic', async () => {
-  assert.equal(await checkScope(failing(), 'How many bags?'), 'off_topic');
-  assert.equal(await checkScope(replying('not json'), 'How many bags?'), 'off_topic');
+  assert.equal(await checkScope(failing(), ask('How many bags?')), 'off_topic');
+  assert.equal(await checkScope(replying('not json'), ask('How many bags?')), 'off_topic');
+});
+
+test("scope check sees the user's own latest words, not a rewrite", async () => {
+  const model = replying('{"result":"off_topic"}');
+  const turns = [
+    { role: 'user' as const, text: 'How many bags in Economy?' },
+    { role: 'assistant' as const, text: 'Two bags.' },
+    { role: 'user' as const, text: 'Who will win the Premier League?' },
+  ];
+  await checkScope(model, turns);
+  const prompt = JSON.stringify(model.doGenerateCalls[0].prompt);
+  assert.match(prompt, /User: Who will win the Premier League\?/);
+  assert.match(prompt, /User: How many bags in Economy\?/);
 });
 
 test('a first question is not rewritten', async () => {
