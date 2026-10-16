@@ -1,0 +1,19 @@
+name: Security item
+description: A security control, scan finding or threat-model item (never paste secrets)
+labels: ["type: security"]
+body:
+  - type: dropdown
+    id: principle
+    attributes:
+      label: Security principle
+      options: [Secure by design, Secure by default, Least privilege, Fail-safe defaults, Defense in depth]
+    validations: { required: true }
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      placeholder: e.g. threat model S1, ZAP finding, CodeQL alert
+  - type: textarea
+    id: detail
+    attributes: { label: "Description and fix" }
+    validations: { required: true }
