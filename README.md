@@ -39,6 +39,21 @@ Server secrets live in `.dev.vars` locally and in Cloudflare secrets (`npx wrang
 | `npm run deploy` | Build and deploy to Cloudflare Workers |
 | `npm run check-env` | Fail if any `.env*` file holds a secret that would be bundled |
 
+## Database
+
+The schema lives in `supabase/migrations/` and is applied with the Supabase CLI (installed as a dev dependency). Every table has Row Level Security, and every policy requires an MFA-verified session. `supabase/tests/rls.test.sql` proves that users can't read each other's chats and customers can't read staff documents. CI runs these tests on every pull request.
+
+Local commands (need Docker Desktop running):
+
+```bash
+npx supabase start       # local Supabase stack
+npx supabase db reset    # re-apply all migrations from scratch
+npx supabase test db     # run the RLS tests
+npx supabase stop
+```
+
+To apply migrations to the hosted project: `npx supabase login`, `npx supabase link --project-ref <ref>`, then `npx supabase db push`.
+
 ## Project management
 
 Work is tracked on the GitHub project board. There is one milestone per build phase, and every change is linked to an issue and merged through a pull request with green CI.
