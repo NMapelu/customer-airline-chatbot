@@ -51,3 +51,6 @@ next-env.d.ts
 # KQ policy pages are fetched at ingest time and never committed (the repo is public)
 docs/public/*
 !docs/public/.gitkeep
+
+# Full evaluation answers (can quote KQ text)
+eval/results.jsonl

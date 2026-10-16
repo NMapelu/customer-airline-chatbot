@@ -3,14 +3,11 @@ import { createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream
 import { z } from 'zod';
 import { getChatSession } from '@/lib/chat-session';
 import { sourcesFrom, streamAnswer } from '@/lib/rag/answer';
-import { CHAT_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD, TOP_K } from '@/lib/rag/config';
+import { CHAT_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
 import { getContactDetails } from '@/lib/rag/contact';
-import { applyGate } from '@/lib/rag/gate';
 import { maskPii } from '@/lib/rag/pii';
+import { decide } from '@/lib/rag/pipeline';
 import { escalationText, REFUSAL_TEXT } from '@/lib/rag/prompts';
-import { retrieve } from '@/lib/rag/retrieve';
-import { rewriteQuestion } from '@/lib/rag/rewrite';
-import { checkScope } from '@/lib/rag/scope';
 import type { ChatMessage, ChatMetadata, Turn } from '@/lib/rag/types';
 
 export const maxDuration = 30;
@@ -50,7 +47,7 @@ function fixedReply(text: string, metadata: ChatMetadata) {
 
 const jsonError = (status: number, error: string) => Response.json({ error }, { status });
 
-// Request lifecycle, overview §8.2 steps 3–8. Saving to history (step 9) arrives in Phase 8.
+// Request lifecycle, overview §8.2 steps 3–8 (steps 4–7 live in lib/rag/pipeline.ts). Saving to history (step 9) arrives in Phase 8.
 export async function POST(req: Request) {
   // 3. Who is asking. No MFA-verified session, no chat.
   let session;
@@ -86,29 +83,23 @@ export async function POST(req: Request) {
   const model = openai(CHAT_MODEL);
 
   try {
-    // 5. Scope check (R1) on the user's own words, then 4. rewrite a follow-up for retrieval.
-    //    The check runs first because the rewrite could make an off-topic message look in scope.
-    if ((await checkScope(model, turns)) === 'off_topic') {
-      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
-    }
-    const standalone = await rewriteQuestion(model, turns);
-
-    // 6. Retrieval, under the user's own session and RLS.
-    const chunks = await retrieve(supabase, openai.embedding(EMBEDDING_MODEL), standalone, TOP_K);
-
-    // 7. Confidence gate (R2) and the staff-content check (§10.11).
-    const gate = applyGate(chunks, role, SIMILARITY_THRESHOLD);
-    if (gate.kind !== 'answer') {
-      if (gate.kind === 'blocked_staff') {
-        console.error('blocked staff content from reaching a customer', { chunkIds: gate.chunkIds });
-      }
+    const decision = await decide({
+      model,
+      embeddingModel: openai.embedding(EMBEDDING_MODEL),
+      supabase,
+      role,
+      turns,
+      threshold: SIMILARITY_THRESHOLD,
+    });
+    if (decision.kind === 'refusal') return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+    if (decision.kind === 'escalation') {
       const contact = await getContactDetails(supabase);
       return fixedReply(escalationText(role, contact), { kind: 'escalation', piiMasked });
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
-    const metadata: ChatMetadata = { kind: 'answer', sources: sourcesFrom(gate.chunks), piiMasked };
-    const result = streamAnswer(model, role, gate.chunks, turns);
+    const metadata: ChatMetadata = { kind: 'answer', sources: sourcesFrom(decision.chunks), piiMasked };
+    const result = streamAnswer(model, role, decision.chunks, turns);
     return createUIMessageStreamResponse({
       stream: toUIMessageStream<ToolSet, ChatMessage>({
         stream: result.stream,
