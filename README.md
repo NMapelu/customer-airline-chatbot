@@ -21,11 +21,11 @@ Requirements: Node.js 22 LTS and an OpenAI API key.
 git clone https://github.com/NMapelu/customer-airline-chatbot.git
 cd customer-airline-chatbot
 npm ci
-cp .env.example .env.local   # then fill in the values
-npm run dev                  # http://localhost:3000
+cp .dev.vars.example .dev.vars   # then fill in the values
+npm run dev                      # http://localhost:3000
 ```
 
-The app refuses to start if a required variable in `.env.local` is missing.
+Server secrets live in `.dev.vars` locally and in Cloudflare secrets (`npx wrangler secret put <NAME>`) when deployed. Don't put them in `.env` files: the Cloudflare build copies `.env*` values into the Worker bundle, so `npm run preview` and `npm run deploy` refuse to run if they find any. Chat requests fail with a clear server log message if a required secret is missing.
 
 ## Scripts
 
@@ -35,8 +35,9 @@ The app refuses to start if a required variable in `.env.local` is missing.
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run the TypeScript compiler without emitting files |
 | `npm run build` | Production build |
-| `npm run preview` | Build for Cloudflare and run the Worker locally (needs `.dev.vars`, see `.dev.vars.example`) |
+| `npm run preview` | Build for Cloudflare and run the Worker locally |
 | `npm run deploy` | Build and deploy to Cloudflare Workers |
+| `npm run check-env` | Fail if any `.env*` file holds a secret that would be bundled |
 
 ## Project management
 
