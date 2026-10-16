@@ -13,6 +13,10 @@ export async function POST(req: Request) {
     system:
       'You are a helpful airline travel assistant. Help with bookings, baggage, seats, cancellations, refunds, and airline queries.',
     messages: await convertToModelMessages(messages),
+    // Full details go to the server log (`npx wrangler tail`); the browser only gets a generic message.
+    onError({ error }) {
+      console.error('chat stream failed', error);
+    },
   });
 
   return result.toUIMessageStreamResponse();

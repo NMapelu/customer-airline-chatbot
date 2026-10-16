@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 
 export default function Chat() {
-  const { messages, sendMessage, status } = useChat();
+  const { messages, sendMessage, status, error } = useChat();
   const [input, setInput] = useState('');
   const busy = status === 'submitted' || status === 'streaming';
 
@@ -22,6 +22,11 @@ export default function Chat() {
             </div>
           </div>
         ))}
+        {error && (
+          <div role="alert" className="rounded-lg px-4 py-2 bg-red-100 text-red-800">
+            Sorry, something went wrong. Please try again.
+          </div>
+        )}
       </div>
       <form
         onSubmit={(e) => {
