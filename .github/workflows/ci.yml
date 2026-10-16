@@ -37,7 +37,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,9 +49,14 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - name: Start local database and apply migrations
-        run: npx supabase db start
+      # Database, auth and API only. `supabase start` after `db start` would not start the rest.
+      - name: Start local Supabase and apply migrations
+        run: npx supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Lint database schema
         run: npx supabase db lint --level warning --fail-on error
       - name: Run RLS tests
         run: npx supabase test db
+      - name: Run integration tests (retrieval, RLS and MFA through the real API)
+        run: |
+          eval "$(npx supabase status -o env)"
+          SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" npm run test:integration
