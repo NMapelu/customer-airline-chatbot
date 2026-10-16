@@ -54,6 +54,12 @@ npx supabase stop
 
 To apply migrations to the hosted project: `npx supabase login`, `npx supabase link --project-ref <ref>`, then `npx supabase db push`.
 
+## Knowledge base
+
+- `docs/sources.json` lists the Kenya Airways pages the chatbot answers from. Their text is **fetched at ingest time and never committed**, because this repo is public. Fetched pages land in `docs/public/`, which git ignores, and from there go only into the private Supabase database.
+- `docs/staff/` holds 10 sample call-centre procedures written for this project. They are marked `illustrative: true` and are **not real Kenya Airways documents**. They describe how an agent applies the public policies, and don't add fees or limits of their own.
+- `npm run check-corpus` checks every document's front matter (audience, sources, dates). A document with a missing or wrong audience fails, so it can never be shown to the wrong users.
+
 ## Project management
 
 Work is tracked on the GitHub project board. There is one milestone per build phase, and every change is linked to an issue and merged through a pull request with green CI.
