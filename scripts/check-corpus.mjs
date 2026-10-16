@@ -1,6 +1,10 @@
 // Checks every knowledge-base document before it can be ingested.
 // The audience in a document's front matter decides who may read it (see the RLS in
 // supabase/migrations), so a missing or wrong audience must stop the build, never default to public.
+//
+// docs/staff/ holds our own sample procedures and is committed. docs/public/ holds KQ's pages,
+// which are fetched at ingest time and never committed, so CI only checks it when files exist.
+// Ingestion runs this with --require-public so it can never load an empty public corpus.
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -72,7 +76,8 @@ function checkDocument(folder, file) {
 }
 
 const failures = [];
-let count = 0;
+const requirePublic = process.argv.includes('--require-public');
+const counts = { public: 0, staff: 0 };
 for (const folder of AUDIENCES) {
   const dir = join('docs', folder);
   if (!existsSync(dir)) {
@@ -81,15 +86,16 @@ for (const folder of AUDIENCES) {
   }
   for (const file of readdirSync(dir).sort()) {
     if (file === '.gitkeep') continue;
-    count += 1;
+    counts[folder] += 1;
     for (const problem of checkDocument(folder, file)) failures.push(`docs/${folder}/${file}: ${problem}`);
   }
 }
-if (count === 0) failures.push('no documents found in docs/public/ or docs/staff/');
+if (counts.staff === 0) failures.push('no staff procedures found in docs/staff/');
+if (requirePublic && counts.public === 0) failures.push('no public pages found in docs/public/ (run the fetch step first)');
 
 if (failures.length > 0) {
   console.error('Knowledge-base check failed:');
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log(`Knowledge-base check passed: ${count} documents.`);
+console.log(`Knowledge-base check passed: ${counts.public} public pages, ${counts.staff} staff procedures.`);
