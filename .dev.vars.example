@@ -1,3 +1,14 @@
 # Local server secrets, used by `npm run dev` and `npm run preview`. Copy to .dev.vars.
 # In production, set each one with `npx wrangler secret put <NAME>`.
 OPENAI_API_KEY=
+
+# Supabase: Project Settings → Data API → Project URL (ends in .supabase.co, nothing after it),
+# and Project Settings → API Keys → the anon / publishable key. Never the service-role key here.
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
+# TEMPORARY development test user (Phase 6 only, replaced by real sign-in in Phase 8).
+# Create the user in the Supabase dashboard, fill in these two, then run `npm run dev-user`,
+# which adds DEV_USER_TOTP_SECRET below. Never set these in Cloudflare.
+DEV_USER_EMAIL=
+DEV_USER_PASSWORD=
