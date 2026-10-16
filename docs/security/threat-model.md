@@ -62,3 +62,4 @@ The ingestion job and deployments run in GitHub Actions.
 | 2026-10-16 | 2 | I3: OpenNext copies `.env*` values into the Worker bundle; secrets moved to Cloudflare bindings and a pre-build guard added |
 | 2026-10-16 | 3 | I1, I2: database RLS and grants in place and tested; a role in `user_metadata` is ignored |
 | 2026-10-16 | 4 | T3 added: KQ text is fetched at ingest (never committed, repo is public), and fetched markup must never be rendered as HTML |
+| 2026-10-16 | 5 | I3, E1: the service-role key is used only by the ingest script and kept in `.env.ingest`, which isn't bundled. `replace_document_chunks` can be called only by `service_role` (tested) and copies the audience from the document, never from the caller |
