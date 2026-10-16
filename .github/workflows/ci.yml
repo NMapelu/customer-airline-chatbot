@@ -30,6 +30,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run check-corpus
+      - run: npm test
       - run: npm run build
       - name: Build Cloudflare Worker
         run: npx opennextjs-cloudflare build
