@@ -42,6 +42,7 @@ Server secrets live in `.dev.vars` locally and in Cloudflare secrets (`npx wrang
 | `npm run check-corpus` | Check the front matter of every knowledge-base document |
 | `npm run ingest` | Load the knowledge base into Supabase (needs `.env.ingest`) |
 | `npm run dev-user` | Set up the temporary development test user (see below) |
+| `npm run eval` | Run the evaluation set and write `eval/report.md` (see below) |
 | `npm test` | Run the unit tests (Node's built-in test runner) |
 | `npm run test:integration` | Run the integration tests against a local Supabase stack (CI runs them) |
 
@@ -79,7 +80,13 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 6. If no passage is similar enough, reply with the KQ contact details instead of calling the model (`gate.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
 7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`).
 
-The similarity threshold in `lib/rag/config.ts` is a placeholder until Phase 7 calibrates it.
+The similarity threshold in `lib/rag/config.ts` is chosen from the evaluation results.
+
+### Evaluation
+
+`eval/questions.jsonl` holds 216 test questions in the categories of overview §13.1: answerable, not covered, off-topic, prompt injection, follow-ups, staff-content leakage, and agent questions (skipped until agent mode in Phase 9). `npm run eval` sends each one through the same pipeline as the chat, signed in as the development test user, so retrieval goes through RLS. An LLM judge checks that every answer's facts are in its passages.
+
+It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A run costs a few US cents of OpenAI credit. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
 
 ### Temporary development test user
 
