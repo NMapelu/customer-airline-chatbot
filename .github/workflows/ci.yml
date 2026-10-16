@@ -49,14 +49,13 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - name: Start local database and apply migrations
-        run: npx supabase db start
+      # Database, auth and API only. `supabase start` after `db start` would not start the rest.
+      - name: Start local Supabase and apply migrations
+        run: npx supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Lint database schema
         run: npx supabase db lint --level warning --fail-on error
       - name: Run RLS tests
         run: npx supabase test db
-      - name: Start the local API and auth
-        run: npx supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Run integration tests (retrieval, RLS and MFA through the real API)
         run: |
           eval "$(npx supabase status -o env)"
