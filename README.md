@@ -35,6 +35,8 @@ The app refuses to start if a required variable in `.env.local` is missing.
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run the TypeScript compiler without emitting files |
 | `npm run build` | Production build |
+| `npm run preview` | Build for Cloudflare and run the Worker locally (needs `.dev.vars`, see `.dev.vars.example`) |
+| `npm run deploy` | Build and deploy to Cloudflare Workers |
 
 ## Project management
 
