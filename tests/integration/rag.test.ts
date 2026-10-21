@@ -1,12 +1,22 @@
-// Integration test for the Phase 6 database path, run in CI against a local Supabase stack
+// Integration test for the chat's database path, run in CI against a local Supabase stack
 // (`npm run test:integration` after `npx supabase start`). No OpenAI calls: embeddings are fixed vectors.
 // It checks, through the real API, RLS and MFA: that the test-user sign-in reaches AAL2, that
-// retrieval returns only the audiences a role allows, that an AAL1 session gets nothing, and that
-// the escalation contact details come from the Contact Us document.
+// retrieval returns only the audiences a role allows, that an AAL1 session gets nothing, that
+// the escalation contact details come from the Contact Us document, and (Phase 8) that saved
+// conversations are private to their owner.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MockEmbeddingModelV4 } from 'ai/test';
+import {
+  deleteConversation,
+  listConversations,
+  loadConversation,
+  openConversation,
+  recentTurns,
+  renameConversation,
+  saveMessage,
+} from '../../lib/chat/history';
 import { getContactDetails } from '../../lib/rag/contact';
 import { retrieve } from '../../lib/rag/retrieve';
 import { devUserClient } from '../../lib/supabase/dev-user';
@@ -120,4 +130,71 @@ test('escalation contact details come from the Contact Us document', async () =>
     phone: '+254 20 123 4567',
     url: 'https://www.kenya-airways.com/contact-us/',
   });
+});
+
+// ---------------------------------------------------------------------------
+// Conversation history (Phase 8), through lib/chat/history.ts as the chat route uses it.
+// ---------------------------------------------------------------------------
+const SOURCE = { title: 'Baggage', section: 'Main', url: 'https://www.kenya-airways.com/baggage/', retrievedAt: '2026-10-16', audience: 'public' as const };
+
+test("a customer's conversation is saved, read back in order, and listed", async () => {
+  const id = crypto.randomUUID();
+  assert.equal(await openConversation(customer, id, 'customer', 'What is my baggage allowance in Economy?'), true);
+  assert.equal(await openConversation(customer, id, 'customer', 'ignored the second time'), true);
+  await saveMessage(customer, id, 'user', 'What is my baggage allowance in Economy?');
+  await saveMessage(customer, id, 'assistant', 'Two bags of 23 kg.', [SOURCE]);
+
+  assert.deepEqual(await recentTurns(customer, id, 5), [
+    { role: 'user', text: 'What is my baggage allowance in Economy?' },
+    { role: 'assistant', text: 'Two bags of 23 kg.' },
+  ]);
+  assert.deepEqual(await recentTurns(customer, id, 1), [{ role: 'assistant', text: 'Two bags of 23 kg.' }]);
+  const loaded = await loadConversation(customer, id);
+  assert.equal(loaded?.title, 'What is my baggage allowance in Economy?');
+  assert.deepEqual(loaded?.messages.map((m) => m.metadata?.sources), [undefined, [SOURCE]]);
+  assert.ok((await listConversations(customer)).some((c) => c.id === id));
+});
+
+test("another user can't read, add to, rename or delete someone's conversation", async () => {
+  const id = crypto.randomUUID();
+  await openConversation(customer, id, 'customer', 'Private question');
+  await saveMessage(customer, id, 'user', 'Private question');
+
+  assert.equal(await loadConversation(agent, id), null);
+  assert.deepEqual(await recentTurns(agent, id, 5), []);
+  assert.ok(!(await listConversations(agent)).some((c) => c.id === id));
+  // RLS hides the row, so the insert collides with it instead of reaching it.
+  assert.equal(await openConversation(agent, id, 'agent', 'Taking over'), false);
+  await assert.rejects(saveMessage(agent, id, 'user', 'Injected'));
+  assert.equal(await renameConversation(agent, id, 'Renamed'), false);
+  assert.equal(await deleteConversation(agent, id), false);
+
+  const still = await loadConversation(customer, id);
+  assert.equal(still?.title, 'Private question');
+  assert.equal(still?.messages.length, 1);
+});
+
+test('conversations are tagged with the real role, whatever the caller claims', async () => {
+  const id = crypto.randomUUID();
+  await assert.rejects(openConversation(customer, id, 'agent', 'Pretending to be an agent'));
+  assert.equal(await openConversation(agent, id, 'agent', 'Agent question'), true);
+});
+
+test('a session without MFA sees no conversations and cannot start one', async () => {
+  const aal1 = createClient(URL, ANON, options);
+  await aal1.auth.signInWithPassword({ email: 'customer@example.test', password });
+  assert.deepEqual(await listConversations(aal1), []);
+  await assert.rejects(openConversation(aal1, crypto.randomUUID(), 'customer', 'No MFA'));
+});
+
+test('the owner can rename and permanently delete a conversation', async () => {
+  const id = crypto.randomUUID();
+  await openConversation(customer, id, 'customer', 'To be deleted');
+  await saveMessage(customer, id, 'user', 'To be deleted');
+  assert.equal(await renameConversation(customer, id, 'Renamed'), true);
+  assert.equal((await loadConversation(customer, id))?.title, 'Renamed');
+  assert.equal(await deleteConversation(customer, id), true);
+  assert.equal(await loadConversation(customer, id), null);
+  const { count } = await admin.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', id);
+  assert.equal(count, 0);
 });
