@@ -93,9 +93,13 @@ async function main() {
       const topSimilarity = Math.max(...decision.retrieved.map((c) => c.similarity), 0);
       const retrievedStaff = decision.retrieved.some((c) => c.audience === 'staff');
       const standalone = decision.standalone;
-      // Documents retrieval found, recorded for escalations too, to tell a retrieval miss from a coverage call.
-      const retrievedSlugs = [...new Set(decision.retrieved.map((c) => slugs.get(c.title) ?? c.title))];
-      if (decision.kind === 'escalation') return { ...base, kind: 'escalation', topSimilarity, retrievedStaff, standalone, retrievedSlugs, note: decision.reason };
+      // What retrieval searched for and found, recorded for escalations too, to tell a retrieval
+      // miss from a coverage call. Section names and scores only, never passage text.
+      const searchQuery = decision.searchQuery;
+      const retrievedSlugs = decision.retrieved.map(
+        (c) => `${slugs.get(c.title) ?? c.title}${c.section ? ` § ${c.section}` : ''} (${c.similarity.toFixed(3)})`,
+      );
+      if (decision.kind === 'escalation') return { ...base, kind: 'escalation', topSimilarity, retrievedStaff, standalone, searchQuery, retrievedSlugs, note: decision.reason };
 
       const answer = await streamAnswer(model, 'customer', decision.chunks, turns).text;
       const judged = await judgeGrounded(judge, answer, decision.chunks);
@@ -107,6 +111,7 @@ async function main() {
         retrievedStaff,
         sourceSlugs,
         standalone,
+        searchQuery,
         retrievedSlugs,
         answer,
         grounded: judged.grounded,
