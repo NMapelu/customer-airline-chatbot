@@ -5,7 +5,7 @@
 //   npm run eval -- --category=uncovered  one or more categories (comma-separated)
 //   npm run eval -- --threshold=0.45      try another threshold
 //
-// It signs in as the development test user from .dev.vars (see the README), so retrieval goes
+// It signs in as the test user from .dev.vars (see the README), so retrieval goes
 // through RLS exactly as in the chat. Agent questions are skipped until agent mode (Phase 9).
 // Full answers go to eval/results.jsonl, which git ignores: answers can quote KQ's text.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -68,7 +68,12 @@ async function main() {
   if (!existsSync('.dev.vars')) fail('.dev.vars not found. Set up the test user first (see the README).');
   process.loadEnvFile('.dev.vars');
   const env = getServerEnv();
-  const supabase = await devUserClient(env);
+  const supabase = await devUserClient({
+    ...env,
+    DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
+    DEV_USER_PASSWORD: process.env.DEV_USER_PASSWORD,
+    DEV_USER_TOTP_SECRET: process.env.DEV_USER_TOTP_SECRET,
+  });
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
   const model = openai(CHAT_MODEL);
   const embeddingModel = openai.embedding(EMBEDDING_MODEL);

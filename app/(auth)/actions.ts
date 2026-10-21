@@ -1,0 +1,114 @@
+'use server';
+
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { newTotpFactor, type EnrolStart } from '@/lib/auth/mfa';
+import { codeSchema, factorIdSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
+import { HOME } from '@/lib/auth/access';
+import { getAuthState } from '@/lib/supabase/auth-state';
+import { createClient } from '@/lib/supabase/server';
+
+// Sign-up, sign-in and MFA (overview §10.1, US-02 to US-04). Each action runs on the server with
+// the anon key; Supabase Auth checks the password and codes and sets the HTTP-only session cookies.
+// Error messages stay generic, so they don't reveal whether an account exists.
+
+// `email` goes back to the form after an error: React clears a form once its action finishes.
+export type FormState = { error?: string; done?: boolean; email?: string } | undefined;
+
+const field = (form: FormData, name: string) => {
+  const value = form.get(name);
+  return typeof value === 'string' ? value : '';
+};
+
+export async function signUp(_prev: FormState, form: FormData): Promise<FormState> {
+  const email = field(form, 'email').trim();
+  const parsed = signUpSchema.safeParse({
+    email,
+    password: field(form, 'password'),
+    confirm: field(form, 'confirm'),
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (issue.path[0] === 'email') return { error: 'Please enter a valid email address.', email };
+    if (issue.path[0] === 'confirm') return { error: "The two passwords don't match.", email };
+    return { error: 'Please choose a stronger password (see the rule under the field).', email };
+  }
+
+  // The confirmation link comes back to this site. Supabase only sends it to an allow-listed
+  // URL (Auth → URL Configuration); anything else falls back to the Site URL.
+  const origin = (await headers()).get('origin');
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: origin && URL.canParse(origin) ? { emailRedirectTo: `${new URL(origin).origin}/auth/confirm` } : undefined,
+  });
+  if (error) {
+    if (error.code === 'weak_password') return { error: 'Please choose a stronger password.', email };
+    console.error('sign-up failed', error.code, error.message);
+    return { error: "We couldn't create the account. Please try again later.", email };
+  }
+  // The same message whether or not the email was already registered.
+  return { done: true };
+}
+
+export async function signIn(_prev: FormState, form: FormData): Promise<FormState> {
+  const email = field(form, 'email').trim();
+  const parsed = signInSchema.safeParse({ email, password: field(form, 'password') });
+  if (!parsed.success) return { error: 'Please enter your email and password.', email };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  if (error) {
+    // Only reachable with the right password, so it doesn't help anyone guess.
+    if (error.code === 'email_not_confirmed') return { error: 'Please confirm your email first, using the link we sent you.', email };
+    return { error: 'The email or password is incorrect.', email };
+  }
+  // Password only (AAL1): on to enrolment (first sign-in) or the code.
+  const { status } = await getAuthState(supabase);
+  redirect(status === 'error' ? '/login' : HOME[status]);
+}
+
+// Step 1 of enrolment (US-03): a new authenticator secret, shown as a QR code and a key.
+// Only for a signed-in user who has no verified authenticator yet; replacing one goes through
+// settings and needs a code from the current one.
+export async function startEnrolment(): Promise<EnrolStart> {
+  const supabase = await createClient();
+  const { status } = await getAuthState(supabase);
+  if (status !== 'needs_enrol') return { ok: false, error: 'Please sign in again.' };
+  return newTotpFactor(supabase);
+}
+
+// Step 2 of enrolment: the first code proves the app was set up, and the session becomes AAL2.
+export async function finishEnrolment(_prev: FormState, form: FormData): Promise<FormState> {
+  const factorId = factorIdSchema.safeParse(field(form, 'factorId'));
+  const code = codeSchema.safeParse(field(form, 'code'));
+  if (!factorId.success) return { error: 'Please start again.' };
+  if (!code.success) return { error: 'Please enter the 6-digit code from your app.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factorId.data, code: code.data });
+  if (error) return { error: "That code didn't work. Check your app and try the newest code." };
+  redirect('/');
+}
+
+// Every later sign-in (US-04): the code from the enrolled authenticator.
+export async function verifyCode(_prev: FormState, form: FormData): Promise<FormState> {
+  const code = codeSchema.safeParse(field(form, 'code'));
+  if (!code.success) return { error: 'Please enter the 6-digit code from your app.' };
+
+  const supabase = await createClient();
+  const factors = await supabase.auth.mfa.listFactors();
+  const factor = factors.data?.totp.find((f) => f.status === 'verified');
+  if (!factor) redirect('/');
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.data });
+  if (error) return { error: "That code didn't work. Check your app and try the newest code." };
+  redirect('/');
+}
+
+// US-14. Ends this browser's session only; other devices stay signed in.
+export async function signOut(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut({ scope: 'local' });
+  redirect('/login');
+}
