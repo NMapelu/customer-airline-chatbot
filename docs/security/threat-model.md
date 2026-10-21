@@ -55,7 +55,7 @@ The ingestion job and deployments run in GitHub Actions.
 | I5 | Information disclosure | Model invents fees or rules | Answers only from passages above the similarity threshold that a coverage check confirms answer the question (fails to escalation), otherwise the fixed escalation reply; sources built from stored chunks, not the model; evaluation set | 6, 13 | Partly done (Phases 6, 7); threshold calibrated on the evaluation set |
 | T3 | Tampering | Fetched KQ page text carries HTML or script into answers and source snippets | Fetch script drops script, style, form and nav elements from the parsed DOM; the chat UI must render markdown with raw HTML disabled | 10.4 | Partly done (Phase 4); rendering in Phase 7 |
 | D1 | Denial of service | Flooding `/api/chat` to run up OpenAI cost | Rate limits, length limits, OpenAI budget cap | 10.8 | Partly done (budget cap) |
-| E2 | Elevation of privilege | Email confirmation link used as an open redirect, or to skip MFA | `/auth/confirm` checks the one-time token and always sends the user to the enrol page; Supabase only sends links to allow-listed URLs | 10.1 | Done (Phase 8) |
+| E2 | Elevation of privilege | Email confirmation link used as an open redirect, or to skip MFA | `/auth/confirm` exchanges the one-time code (usable only in the browser that signed up, PKCE) and sends the user only to the enrol or sign-in page; Supabase only redirects to allow-listed URLs | 10.1 | Done (Phase 8) |
 | E1 | Elevation of privilege | Compromised CI job gains deploy rights | Least-privilege workflow permissions, SHA-pinned actions, protected environments | 15.5 | In progress (Phase 1) |
 
 ## Review log

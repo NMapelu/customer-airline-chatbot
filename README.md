@@ -110,7 +110,8 @@ Do this once in the Supabase dashboard:
 4. **Authentication → URL Configuration**: set **Site URL** to `https://kq-policy-assistant.neema-mapelu.workers.dev`, and add these **Redirect URLs**:
    - `https://kq-policy-assistant.neema-mapelu.workers.dev/auth/confirm`
    - `http://localhost:3000/auth/confirm`
-5. **Authentication → Emails → Confirm signup**: replace the message body with the contents of `supabase/templates/confirmation.html`, so the link goes to `/auth/confirm`.
+
+The default "Confirm signup" email works as it is: its link confirms the address and then opens `/auth/confirm`, which signs the user in and takes them to set up their authenticator. If the link is opened in a different browser from the one used to sign up, the email is still confirmed and the user is asked to sign in.
 
 Supabase's built-in email sender is for testing: it only delivers to the email addresses of your Supabase team members and only a few emails an hour. Use your own email to test sign-up; a custom SMTP sender is set up before launch.
 
