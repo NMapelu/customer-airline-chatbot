@@ -103,4 +103,5 @@ test('policy query returns the restated question, and the question itself on err
   assert.equal(await policyQuery(replying(' Unaccompanied minor fee on domestic flights '), 'Does my son pay extra to fly alone?'), 'Unaccompanied minor fee on domestic flights');
   assert.equal(await policyQuery(failing(), 'Does my son pay extra to fly alone?'), 'Does my son pay extra to fly alone?');
   assert.equal(await policyQuery(replying(''), 'Does my son pay extra to fly alone?'), 'Does my son pay extra to fly alone?');
+  assert.equal(await policyQuery(replying('Query: Unaccompanied minor fee'), 'Does my son pay extra?'), 'Unaccompanied minor fee');
 });
