@@ -1,17 +1,19 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ServerEnv } from '../env';
 import { totp } from '../totp';
 
-// TEMPORARY, development only. Until Phase 8 adds sign-in pages, `npm run dev` signs in as one
-// test user with a password and a TOTP code, so the chat runs under a real MFA-verified (AAL2)
-// session and the same RLS as real users. Nothing here bypasses RLS or uses the service role.
-// It never runs in a production build: the caller checks NODE_ENV first.
+// The test user for scripts: `npm run eval` and the integration tests sign in as it with a
+// password and a TOTP code, so they get a real MFA-verified (AAL2) session and the same RLS as
+// real users. Nothing here bypasses RLS or uses the service role. The web app never uses it:
+// since Phase 8 people sign in through the sign-in pages.
 // Set it up once with `npm run dev-user` (see the README).
 
-type DevUserEnv = Pick<
-  ServerEnv,
-  'SUPABASE_URL' | 'SUPABASE_ANON_KEY' | 'DEV_USER_EMAIL' | 'DEV_USER_PASSWORD' | 'DEV_USER_TOTP_SECRET'
->;
+type DevUserEnv = {
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  DEV_USER_EMAIL?: string;
+  DEV_USER_PASSWORD?: string;
+  DEV_USER_TOTP_SECRET?: string;
+};
 type Cached = { client: SupabaseClient; expiresAt: number };
 // One session per test user, reused until shortly before it expires.
 const cache = new Map<string, Cached>();

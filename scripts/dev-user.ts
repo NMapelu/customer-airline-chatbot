@@ -1,10 +1,10 @@
-// One-time setup for the TEMPORARY development test user (Phase 6, removed in Phase 8).
+// One-time setup for the test user that `npm run eval` signs in as.
 //
 //   npm run dev-user
 //
 // Reads SUPABASE_URL, SUPABASE_ANON_KEY, DEV_USER_EMAIL and DEV_USER_PASSWORD from .dev.vars,
 // signs in as that user, enrols an authenticator (TOTP) and saves its secret to .dev.vars as
-// DEV_USER_TOTP_SECRET, so `npm run dev` can sign in at AAL2 like a real user would.
+// DEV_USER_TOTP_SECRET, so the evaluation can sign in at AAL2 like a real user would.
 // It uses the anon key only. Create the user first in the Supabase dashboard (see the README).
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
@@ -75,7 +75,7 @@ async function main() {
   const text = readFileSync(FILE, 'utf8');
   appendFileSync(FILE, `${text.endsWith('\n') ? '' : '\n'}DEV_USER_TOTP_SECRET=${secret}\n`);
   console.log(`Test user ready: ${env.DEV_USER_EMAIL} (role: ${role}), MFA enrolled.`);
-  console.log(`Saved DEV_USER_TOTP_SECRET to ${FILE}. Now run npm run dev.`);
+  console.log(`Saved DEV_USER_TOTP_SECRET to ${FILE}. Now run npm run eval.`);
 }
 
 main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));

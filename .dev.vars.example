@@ -7,7 +7,7 @@ OPENAI_API_KEY=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 
-# TEMPORARY development test user (Phase 6 only, replaced by real sign-in in Phase 8).
+# Optional: the test user that `npm run eval` signs in as. The web app ignores these.
 # Create the user in the Supabase dashboard, fill in these two, then run `npm run dev-user`,
 # which adds DEV_USER_TOTP_SECRET below. Never set these in Cloudflare.
 DEV_USER_EMAIL=

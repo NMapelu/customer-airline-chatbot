@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream, type ToolSet } from 'ai';
 import { z } from 'zod';
+import { openConversation, recentTurns, saveMessage } from '@/lib/chat/history';
 import { getChatSession } from '@/lib/chat-session';
 import { sourcesFrom, streamAnswer } from '@/lib/rag/answer';
 import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
@@ -8,28 +9,16 @@ import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
 import { escalationText, REFUSAL_TEXT } from '@/lib/rag/prompts';
-import type { ChatMessage, ChatMetadata, Turn } from '@/lib/rag/types';
+import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
 
 export const maxDuration = 30;
 
-// Only roles and text are read from the request; everything else is ignored.
+// The browser sends the conversation id and the new question only. Earlier turns are read from
+// the database, so a client can't supply its own version of the conversation.
 const bodySchema = z.object({
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        parts: z.array(z.looseObject({ type: z.string(), text: z.string().optional() })).max(50),
-      }),
-    )
-    .min(1)
-    .max(100),
+  id: z.uuid(),
+  text: z.string(),
 });
-
-const textOf = (parts: { type: string; text?: string }[]) =>
-  parts
-    .filter((p) => p.type === 'text')
-    .map((p) => p.text ?? '')
-    .join('');
 
 // A fixed reply (refusal or escalation) streamed like a normal answer, without calling the model.
 function fixedReply(text: string, metadata: ChatMetadata) {
@@ -47,7 +36,7 @@ function fixedReply(text: string, metadata: ChatMetadata) {
 
 const jsonError = (status: number, error: string) => Response.json({ error }, { status });
 
-// Request lifecycle, overview §8.2 steps 3–8 (steps 4–7 live in lib/rag/pipeline.ts). Saving to history (step 9) arrives in Phase 8.
+// Request lifecycle, overview §8.2 steps 3–9 (steps 4–7 live in lib/rag/pipeline.ts).
 export async function POST(req: Request) {
   // 3. Who is asking. No MFA-verified session, no chat.
   let session;
@@ -61,28 +50,28 @@ export async function POST(req: Request) {
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, 'Invalid request.');
-  const recent = parsed.data.messages.slice(-(HISTORY_TURNS * 2));
-  const latest = recent.at(-1);
-  if (!latest || latest.role !== 'user') return jsonError(400, 'Invalid request.');
-  const question = textOf(latest.parts).trim();
+  const { id: conversationId } = parsed.data;
+  const question = parsed.data.text.trim();
   if (!question) return jsonError(400, 'Please type a question.');
   if (question.length > MAX_QUESTION_CHARS) {
     return jsonError(413, `Please keep your question under ${MAX_QUESTION_CHARS} characters.`);
   }
 
-  // R7: mask personal details in everything that goes to OpenAI.
-  let piiMasked = false;
-  const turns: Turn[] = recent.map((m) => {
-    const { text, found } = maskPii(textOf(m.parts).slice(0, 4000));
-    if (m === latest && found.length > 0) piiMasked = true;
-    return { role: m.role, text };
-  });
+  // R7: mask personal details before the question goes to OpenAI or into the history.
+  const { text: masked, found } = maskPii(question);
+  const piiMasked = found.length > 0;
 
   const { env, supabase, role } = session;
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
   const model = openai(CHAT_MODEL);
 
   try {
+    // 9. History: open (or create) the conversation, read the earlier turns, save the question.
+    if (!(await openConversation(supabase, conversationId, role, masked))) return jsonError(404, 'Conversation not found.');
+    const earlier = await recentTurns(supabase, conversationId, HISTORY_TURNS * 2 - 1);
+    await saveMessage(supabase, conversationId, 'user', masked);
+    const turns = [...earlier, { role: 'user' as const, text: masked }];
+
     const decision = await decide({
       model,
       checkModel: openai(CHECK_MODEL),
@@ -92,19 +81,36 @@ export async function POST(req: Request) {
       turns,
       threshold: SIMILARITY_THRESHOLD,
     });
-    if (decision.kind === 'refusal') return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+    if (decision.kind === 'refusal') {
+      await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT);
+      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+    }
     if (decision.kind === 'escalation') {
-      const contact = await getContactDetails(supabase);
-      return fixedReply(escalationText(role, contact), { kind: 'escalation', piiMasked });
+      const text = escalationText(role, await getContactDetails(supabase));
+      await saveMessage(supabase, conversationId, 'assistant', text);
+      return fixedReply(text, { kind: 'escalation', piiMasked });
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
-    const metadata: ChatMetadata = { kind: 'answer', sources: sourcesFrom(decision.chunks), piiMasked };
+    const sources = sourcesFrom(decision.chunks);
+    const metadata: ChatMetadata = { kind: 'answer', sources, piiMasked };
     const result = streamAnswer(model, role, decision.chunks, turns);
     return createUIMessageStreamResponse({
       stream: toUIMessageStream<ToolSet, ChatMessage>({
         stream: result.stream,
         messageMetadata: ({ part }) => (part.type === 'start' ? metadata : undefined),
+        // Saved once the answer has finished, before the response closes. A failed or cut-off
+        // answer is not saved, so the history never holds half an answer.
+        async onEnd({ outcome, finishReason, responseMessage }) {
+          if (outcome.status !== 'completed' || finishReason === 'error') return;
+          const text = responseMessage.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+          if (!text.trim()) return;
+          try {
+            await saveMessage(supabase, conversationId, 'assistant', text, sources);
+          } catch (error) {
+            console.error('could not save the answer', error);
+          }
+        },
       }),
     });
   } catch (error) {

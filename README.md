@@ -11,7 +11,7 @@ Questions outside the policies are refused or handed off to KQ customer service,
 
 ## Tech stack
 
-Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · OpenAI (GPT-4o-mini, text-embedding-3-small) · Supabase (Auth with TOTP MFA, Postgres, pgvector, Row Level Security) · Cloudflare Workers · GitHub Actions
+Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · OpenAI (GPT-4o, text-embedding-3-small) · Supabase (Auth with TOTP MFA, Postgres, pgvector, Row Level Security) · Cloudflare Workers · GitHub Actions
 
 ## Getting started
 
@@ -41,7 +41,7 @@ Server secrets live in `.dev.vars` locally and in Cloudflare secrets (`npx wrang
 | `npm run fetch-corpus` | Download the KQ pages in `docs/sources.json` into `docs/public/` (not committed) |
 | `npm run check-corpus` | Check the front matter of every knowledge-base document |
 | `npm run ingest` | Load the knowledge base into Supabase (needs `.env.ingest`) |
-| `npm run dev-user` | Set up the temporary development test user (see below) |
+| `npm run dev-user` | Set up the test user that `npm run eval` signs in as (see below) |
 | `npm run eval` | Run the evaluation set and write `eval/report.md` (see below) |
 | `npm test` | Run the unit tests (Node's built-in test runner) |
 | `npm run test:integration` | Run the integration tests against a local Supabase stack (CI runs them) |
@@ -73,31 +73,58 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 `app/api/chat/route.ts` runs each question through the modules in `lib/rag/`:
 
 1. Check the user has an MFA-verified session and read their role from `app_metadata`.
-2. Mask anything that looks like a card, passport, phone number or booking reference (`pii.ts`).
+2. Mask anything that looks like a card, passport, phone number or booking reference (`pii.ts`), then save the question to the conversation and read the earlier turns from the database (`lib/chat/history.ts`). The browser sends only the conversation id and the new question.
 3. Refuse messages that aren't about Kenya Airways policy (`scope.ts`), judging the user's own words. If the check fails, the question is refused.
 4. Turn a follow-up into a standalone question for the search (`rewrite.ts`).
 5. Search the knowledge base twice, with the question and with it restated in the airline's policy wording, and take passages from each in turn, so the reworded search adds passages without pushing out what the question itself found. Both searches use the user's own session, so RLS decides what they can see (`retrieve.ts`, `rewrite.ts`).
 6. If no passage is similar enough, or a model check finds the passages don't actually answer the question, reply with the KQ contact details instead of generating an answer (`gate.ts`, `coverage.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
-7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`).
+7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`). The answer and its sources are saved once it has finished; a failed answer is not saved.
 
 The similarity threshold in `lib/rag/config.ts` is chosen from the evaluation results. It only drops clearly unrelated passages; the coverage check makes the close calls, because questions the corpus doesn't cover can still score high similarity.
 
 ### Evaluation
 
-`eval/questions.jsonl` holds 216 test questions in the categories of overview §13.1: answerable, not covered, off-topic, prompt injection, follow-ups, staff-content leakage, and agent questions (skipped until agent mode in Phase 9). `npm run eval` sends each one through the same pipeline as the chat, signed in as the development test user, so retrieval goes through RLS. An LLM judge checks that every answer's facts are in its passages.
+`eval/questions.jsonl` holds 216 test questions in the categories of overview §13.1: answerable, not covered, off-topic, prompt injection, follow-ups, staff-content leakage, and agent questions (skipped until agent mode in Phase 9). `npm run eval` sends each one through the same pipeline as the chat, signed in as the test user (see below), so retrieval goes through RLS. An LLM judge checks that every answer's facts are in its passages.
 
 It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A full run makes about 700 OpenAI calls, mostly on gpt-4o; estimated from token counts, that is roughly 4 US dollars of credit. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
 
-### Temporary development test user
+## Accounts and sign-in
 
-Real sign-in arrives in Phase 8. Until then the chat works only under `npm run dev`, signed in as one test user with a real MFA-verified session, so it goes through the same RLS as a real user. Every production build (`npm run preview`, `npm run deploy`) answers 401.
+Everyone signs up with an email and password, confirms the email, and must set up an authenticator app (TOTP) before the chat opens. Every later sign-in asks for a code from the app. A session counts as signed in only at AAL2 (password and code):
+
+- `proxy.ts` runs before every page and API route. No session goes to `/login`; a password without a code goes to `/mfa/enroll` or `/mfa/verify`; `/api/chat` answers 401. If the check itself fails, the request is refused.
+- Pages, Server Actions and `/api/chat` check AAL2 again on the server, and every RLS policy requires it too.
+- Session cookies are HTTP-only, SameSite=Lax and Secure (except under `npm run dev`). The browser never talks to Supabase directly; all auth calls go through Server Actions.
+- MFA can't be turned off. In **Settings**, users can replace their authenticator after entering a code from the current one.
+- **Lost authenticator (manual recovery):** after checking the person's identity, the project owner deletes their authenticator in the Supabase dashboard (**Authentication → Users → the user → Multi-factor authentication**). At their next sign-in they set up a new one.
+
+Conversations are saved and listed in the sidebar, newest first. Users can open, rename and delete them; deleting is permanent. Questions are saved with personal details masked.
+
+### Setting up sign-in on the hosted Supabase project
+
+Do this once in the Supabase dashboard:
+
+1. **Authentication → Sign In / Providers → Email**: enabled, with **Confirm email** on.
+2. **Authentication → Policies → Passwords** (or the Email provider settings): minimum length **12**, and require **lowercase, uppercase letters and digits**. The sign-up form enforces the same rule.
+3. **Authentication → Multi-Factor**: **TOTP (App Authenticator)** enabled.
+4. **Authentication → URL Configuration**: set **Site URL** to `https://kq-policy-assistant.neema-mapelu.workers.dev`, and add these **Redirect URLs**:
+   - `https://kq-policy-assistant.neema-mapelu.workers.dev/auth/confirm`
+   - `http://localhost:3000/auth/confirm`
+5. **Authentication → Emails → Confirm signup**: replace the message body with the contents of `supabase/templates/confirmation.html`, so the link goes to `/auth/confirm`.
+
+Supabase's built-in email sender is for testing: it only delivers to the email addresses of your Supabase team members and only a few emails an hour. Use your own email to test sign-up; a custom SMTP sender is set up before launch.
+
+The local stack (`npx supabase start`) is configured the same way in `supabase/config.toml`. Its emails appear in Mailpit at http://127.0.0.1:54324.
+
+### Test user for the evaluation
+
+`npm run eval` signs in as one test user with a password and a TOTP code, so it gets a real MFA-verified session and the same RLS as everyone else. The web app never uses it.
 
 1. In the Supabase dashboard, open **Authentication → Users → Add user → Create new user**. Use an email you control, a strong password, and tick **Auto Confirm User**.
 2. In `.dev.vars`, fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DEV_USER_EMAIL` and `DEV_USER_PASSWORD` (see `.dev.vars.example`).
 3. Run `npm run dev-user`. It enrols an authenticator for that user and saves its secret to `.dev.vars` as `DEV_USER_TOTP_SECRET`.
-4. Run `npm run dev` and ask a question.
 
-These values stay in `.dev.vars` only. Never set them as Cloudflare secrets. Phase 8 removes the test user.
+These values stay in `.dev.vars` only. Never set them as Cloudflare secrets.
 
 ## Project management
 
