@@ -76,7 +76,7 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 2. Mask anything that looks like a card, passport, phone number or booking reference (`pii.ts`).
 3. Refuse messages that aren't about Kenya Airways policy (`scope.ts`), judging the user's own words. If the check fails, the question is refused.
 4. Turn a follow-up into a standalone question for the search (`rewrite.ts`).
-5. Search the knowledge base with the user's own session, so RLS decides what they can see (`retrieve.ts`).
+5. Search the knowledge base twice, with the question and with it restated in the airline's policy wording, and keep the best passages of both. Both searches use the user's own session, so RLS decides what they can see (`retrieve.ts`, `rewrite.ts`).
 6. If no passage is similar enough, or a model check finds the passages don't actually answer the question, reply with the KQ contact details instead of generating an answer (`gate.ts`, `coverage.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
 7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`).
 
