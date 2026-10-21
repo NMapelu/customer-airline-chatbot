@@ -14,7 +14,9 @@ export type Decision =
   | { kind: 'answer'; standalone: string; retrieved: RetrievedChunk[]; chunks: RetrievedChunk[] };
 
 export type PipelineInput = {
+  // Rewrites follow-ups; the scope and coverage checks run on checkModel.
   model: LanguageModel;
+  checkModel: LanguageModel;
   embeddingModel: EmbeddingModel;
   supabase: SupabaseClient;
   role: Role;
@@ -24,10 +26,10 @@ export type PipelineInput = {
 
 // Overview §8.2 steps 4–7, shared by the chat route and the evaluation script so both measure
 // the same behaviour. It decides what kind of reply to give; generating the answer is separate.
-export async function decide({ model, embeddingModel, supabase, role, turns, threshold }: PipelineInput): Promise<Decision> {
+export async function decide({ model, checkModel, embeddingModel, supabase, role, turns, threshold }: PipelineInput): Promise<Decision> {
   // 5. Scope check (R1) on the user's own words, then 4. rewrite a follow-up for retrieval.
   //    The check runs first because the rewrite could make an off-topic message look in scope.
-  if ((await checkScope(model, turns)) === 'off_topic') return { kind: 'refusal' };
+  if ((await checkScope(checkModel, turns)) === 'off_topic') return { kind: 'refusal' };
   const standalone = await rewriteQuestion(model, turns);
 
   // 6. Retrieval, under the user's own session and RLS.
@@ -41,7 +43,7 @@ export async function decide({ model, embeddingModel, supabase, role, turns, thr
   }
   if (gate.kind === 'no_evidence') return { kind: 'escalation', reason: 'no_evidence', standalone, retrieved };
   //    Similar is not the same as answering: a model confirms the passages answer the question.
-  if ((await checkCoverage(model, standalone, gate.chunks)) === 'not_covered') {
+  if ((await checkCoverage(checkModel, standalone, gate.chunks)) === 'not_covered') {
     return { kind: 'escalation', reason: 'not_covered', standalone, retrieved };
   }
   return { kind: 'answer', standalone, retrieved, chunks: gate.chunks };
