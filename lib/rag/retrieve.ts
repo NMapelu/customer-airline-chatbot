@@ -43,3 +43,13 @@ export async function retrieve(
     similarity: r.similarity,
   }));
 }
+
+// Combines the results of several searches: each chunk once, at its best similarity, best first.
+export function mergeResults(lists: RetrievedChunk[][], topK: number): RetrievedChunk[] {
+  const best = new Map<number, RetrievedChunk>();
+  for (const chunk of lists.flat()) {
+    const seen = best.get(chunk.chunkId);
+    if (!seen || chunk.similarity > seen.similarity) best.set(chunk.chunkId, chunk);
+  }
+  return [...best.values()].sort((a, b) => b.similarity - a.similarity).slice(0, topK);
+}

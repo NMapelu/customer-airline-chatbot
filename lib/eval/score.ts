@@ -34,7 +34,9 @@ export type EvalResult = {
   grounded: boolean | null;
   // The standalone question retrieval used (the rewrite, for a follow-up).
   standalone?: string;
-  // Every document retrieval returned, before the threshold and coverage check.
+  // The question restated in policy wording for the second search.
+  searchQuery?: string;
+  // Every chunk retrieval returned, as "slug § section (similarity)", before the threshold and coverage check.
   retrievedSlugs?: string[];
   note?: string;
 };
