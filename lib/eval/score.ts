@@ -53,7 +53,7 @@ export function verdict(q: EvalQuestion, r: EvalResult): Verdict {
     case 'answerable':
     case 'follow_up':
     case 'agent': {
-      if (r.kind !== 'answer') return { pass: false, reason: `expected an answer, got ${r.kind}` };
+      if (r.kind !== 'answer') return { pass: false, reason: `expected an answer, got ${r.kind}${r.note ? ` (${r.note})` : ''}` };
       if (q.expect_docs && !q.expect_docs.some((d) => r.sourceSlugs.includes(d))) {
         return { pass: false, reason: `expected a source from ${q.expect_docs.join(' or ')}, got ${r.sourceSlugs.join(', ') || 'none'}` };
       }
