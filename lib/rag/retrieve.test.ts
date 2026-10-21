@@ -16,21 +16,31 @@ const chunk = (chunkId: number, similarity: number): RetrievedChunk => ({
   similarity,
 });
 
-test('merged results keep each chunk once at its best similarity, best first', () => {
+test('merged results take turns between searches and keep each chunk once', () => {
   const merged = mergeResults(
     [
       [chunk(1, 0.6), chunk(2, 0.5)],
-      [chunk(2, 0.7), chunk(3, 0.4)],
+      [chunk(3, 0.9), chunk(1, 0.7), chunk(4, 0.4)],
     ],
     5,
   );
   assert.deepEqual(
     merged.map((c) => [c.chunkId, c.similarity]),
     [
-      [2, 0.7],
       [1, 0.6],
-      [3, 0.4],
+      [3, 0.9],
+      [2, 0.5],
+      [4, 0.4],
     ],
+  );
+});
+
+test("a reworded query can't crowd out the question's own best chunks", () => {
+  const direct = [chunk(1, 0.6), chunk(2, 0.55), chunk(3, 0.5), chunk(4, 0.45)];
+  const reworded = [chunk(11, 0.8), chunk(12, 0.79), chunk(13, 0.78), chunk(14, 0.77)];
+  assert.deepEqual(
+    mergeResults([direct, reworded], 4).map((c) => c.chunkId),
+    [1, 11, 2, 12],
   );
 });
 

@@ -33,7 +33,7 @@ export async function decide({ model, checkModel, embeddingModel, supabase, role
   const standalone = await rewriteQuestion(model, turns);
 
   // 6. Retrieval, under the user's own session and RLS: once with the question and once with it
-  //    restated in policy wording, keeping the best TOP_K chunks of both.
+  //    restated in policy wording, the two taking turns to fill TOP_K.
   const [direct, searchQuery] = await Promise.all([
     retrieve(supabase, embeddingModel, standalone, TOP_K),
     policyQuery(model, standalone),

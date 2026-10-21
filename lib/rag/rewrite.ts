@@ -35,7 +35,7 @@ export async function policyQuery(model: LanguageModel, question: string): Promi
       temperature: 0,
       maxOutputTokens: 120,
     });
-    const query = text.trim();
+    const query = text.trim().replace(/^(search )?query:\s*/i, '');
     return query && query.length <= 500 ? query : question;
   } catch (error) {
     console.error('policy query rewrite failed, searching with the question only', error);
