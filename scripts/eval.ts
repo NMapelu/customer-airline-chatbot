@@ -92,7 +92,8 @@ async function main() {
       if (decision.kind === 'refusal') return { ...base, kind: 'refusal' };
       const topSimilarity = Math.max(...decision.retrieved.map((c) => c.similarity), 0);
       const retrievedStaff = decision.retrieved.some((c) => c.audience === 'staff');
-      if (decision.kind === 'escalation') return { ...base, kind: 'escalation', topSimilarity, retrievedStaff, note: decision.reason };
+      const standalone = decision.standalone;
+      if (decision.kind === 'escalation') return { ...base, kind: 'escalation', topSimilarity, retrievedStaff, standalone, note: decision.reason };
 
       const answer = await streamAnswer(model, 'customer', decision.chunks, turns).text;
       const judged = await judgeGrounded(judge, answer, decision.chunks);
@@ -103,6 +104,7 @@ async function main() {
         topSimilarity,
         retrievedStaff,
         sourceSlugs,
+        standalone,
         answer,
         grounded: judged.grounded,
         note: judged.unsupported.length ? `unsupported: ${judged.unsupported.join('; ')}` : undefined,
