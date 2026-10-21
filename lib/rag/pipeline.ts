@@ -3,15 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TOP_K } from './config';
 import { checkCoverage } from './coverage';
 import { applyGate } from './gate';
-import { retrieve } from './retrieve';
-import { rewriteQuestion } from './rewrite';
+import { mergeResults, retrieve } from './retrieve';
+import { policyQuery, rewriteQuestion } from './rewrite';
 import { checkScope } from './scope';
 import type { RetrievedChunk, Role, Turn } from './types';
 
 export type Decision =
   | { kind: 'refusal' }
-  | { kind: 'escalation'; reason: 'no_evidence' | 'not_covered' | 'blocked_staff'; standalone: string; retrieved: RetrievedChunk[] }
-  | { kind: 'answer'; standalone: string; retrieved: RetrievedChunk[]; chunks: RetrievedChunk[] };
+  | { kind: 'escalation'; reason: 'no_evidence' | 'not_covered' | 'blocked_staff'; standalone: string; searchQuery: string; retrieved: RetrievedChunk[] }
+  | { kind: 'answer'; standalone: string; searchQuery: string; retrieved: RetrievedChunk[]; chunks: RetrievedChunk[] };
 
 export type PipelineInput = {
   // Rewrites follow-ups; the scope and coverage checks run on checkModel.
@@ -32,19 +32,27 @@ export async function decide({ model, checkModel, embeddingModel, supabase, role
   if ((await checkScope(checkModel, turns)) === 'off_topic') return { kind: 'refusal' };
   const standalone = await rewriteQuestion(model, turns);
 
-  // 6. Retrieval, under the user's own session and RLS.
-  const retrieved = await retrieve(supabase, embeddingModel, standalone, TOP_K);
+  // 6. Retrieval, under the user's own session and RLS: once with the question and once with it
+  //    restated in policy wording, keeping the best TOP_K chunks of both.
+  const [direct, searchQuery] = await Promise.all([
+    retrieve(supabase, embeddingModel, standalone, TOP_K),
+    policyQuery(model, standalone),
+  ]);
+  const retrieved =
+    searchQuery === standalone
+      ? direct
+      : mergeResults([direct, await retrieve(supabase, embeddingModel, searchQuery, TOP_K)], TOP_K);
 
   // 7. Confidence gate (R2): similarity threshold, staff-content check (§10.11), coverage check.
   const gate = applyGate(retrieved, role, threshold);
   if (gate.kind === 'blocked_staff') {
     console.error('blocked staff content from reaching a customer', { chunkIds: gate.chunkIds });
-    return { kind: 'escalation', reason: 'blocked_staff', standalone, retrieved };
+    return { kind: 'escalation', reason: 'blocked_staff', standalone, searchQuery, retrieved };
   }
-  if (gate.kind === 'no_evidence') return { kind: 'escalation', reason: 'no_evidence', standalone, retrieved };
+  if (gate.kind === 'no_evidence') return { kind: 'escalation', reason: 'no_evidence', standalone, searchQuery, retrieved };
   //    Similar is not the same as answering: a model confirms the passages answer the question.
   if ((await checkCoverage(checkModel, standalone, gate.chunks)) === 'not_covered') {
-    return { kind: 'escalation', reason: 'not_covered', standalone, retrieved };
+    return { kind: 'escalation', reason: 'not_covered', standalone, searchQuery, retrieved };
   }
-  return { kind: 'answer', standalone, retrieved, chunks: gate.chunks };
+  return { kind: 'answer', standalone, searchQuery, retrieved, chunks: gate.chunks };
 }
