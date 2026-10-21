@@ -44,12 +44,21 @@ export async function retrieve(
   }));
 }
 
-// Combines the results of several searches: each chunk once, at its best similarity, best first.
+// Combines the results of several searches by taking turns: the first search's best chunk, then
+// the second's, and so on, skipping chunks already taken. Each search keeps its share of the top K,
+// so a reworded query can add passages but never crowd out what the user's own question found.
+// Each chunk keeps its own similarity for the threshold.
 export function mergeResults(lists: RetrievedChunk[][], topK: number): RetrievedChunk[] {
-  const best = new Map<number, RetrievedChunk>();
-  for (const chunk of lists.flat()) {
-    const seen = best.get(chunk.chunkId);
-    if (!seen || chunk.similarity > seen.similarity) best.set(chunk.chunkId, chunk);
+  const merged: RetrievedChunk[] = [];
+  const seen = new Set<number>();
+  const longest = Math.max(0, ...lists.map((l) => l.length));
+  for (let rank = 0; rank < longest && merged.length < topK; rank += 1) {
+    for (const list of lists) {
+      const chunk = list[rank];
+      if (!chunk || seen.has(chunk.chunkId) || merged.length >= topK) continue;
+      seen.add(chunk.chunkId);
+      merged.push(chunk);
+    }
   }
-  return [...best.values()].sort((a, b) => b.similarity - a.similarity).slice(0, topK);
+  return merged;
 }
