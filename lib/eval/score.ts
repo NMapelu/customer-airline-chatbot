@@ -32,6 +32,8 @@ export type EvalResult = {
   retrievedStaff: boolean;
   answer: string | null;
   grounded: boolean | null;
+  // The standalone question retrieval used (the rewrite, for a follow-up).
+  standalone?: string;
   note?: string;
 };
 
