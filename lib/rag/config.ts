@@ -5,6 +5,10 @@
 // does have (the 158 cm bag size) were missing from answers built on five passages.
 export const CHAT_MODEL = 'gpt-4o-mini';
 export const EMBEDDING_MODEL = 'text-embedding-3-small';
+// The scope and coverage checks decide whether to refuse, escalate or answer. On gpt-4o-mini they
+// refused or escalated questions the passages answer, mostly ones whose answer is "no" (pets in
+// the cabin, Asante points for Ezesha), so they use a stronger model. Each is one short call.
+export const CHECK_MODEL = 'gpt-4o';
 export const TOP_K = 8;
 export const SIMILARITY_THRESHOLD = 0.38;
 
