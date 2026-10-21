@@ -1,6 +1,7 @@
 import type { EmbeddingModel, LanguageModel } from 'ai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TOP_K } from './config';
+import { checkCoverage } from './coverage';
 import { applyGate } from './gate';
 import { retrieve } from './retrieve';
 import { rewriteQuestion } from './rewrite';
@@ -9,7 +10,7 @@ import type { RetrievedChunk, Role, Turn } from './types';
 
 export type Decision =
   | { kind: 'refusal' }
-  | { kind: 'escalation'; reason: 'no_evidence' | 'blocked_staff'; standalone: string; retrieved: RetrievedChunk[] }
+  | { kind: 'escalation'; reason: 'no_evidence' | 'not_covered' | 'blocked_staff'; standalone: string; retrieved: RetrievedChunk[] }
   | { kind: 'answer'; standalone: string; retrieved: RetrievedChunk[]; chunks: RetrievedChunk[] };
 
 export type PipelineInput = {
@@ -32,12 +33,16 @@ export async function decide({ model, embeddingModel, supabase, role, turns, thr
   // 6. Retrieval, under the user's own session and RLS.
   const retrieved = await retrieve(supabase, embeddingModel, standalone, TOP_K);
 
-  // 7. Confidence gate (R2) and the staff-content check (§10.11).
+  // 7. Confidence gate (R2): similarity threshold, staff-content check (§10.11), coverage check.
   const gate = applyGate(retrieved, role, threshold);
   if (gate.kind === 'blocked_staff') {
     console.error('blocked staff content from reaching a customer', { chunkIds: gate.chunkIds });
     return { kind: 'escalation', reason: 'blocked_staff', standalone, retrieved };
   }
   if (gate.kind === 'no_evidence') return { kind: 'escalation', reason: 'no_evidence', standalone, retrieved };
+  //    Similar is not the same as answering: a model confirms the passages answer the question.
+  if ((await checkCoverage(model, standalone, gate.chunks)) === 'not_covered') {
+    return { kind: 'escalation', reason: 'not_covered', standalone, retrieved };
+  }
   return { kind: 'answer', standalone, retrieved, chunks: gate.chunks };
 }
