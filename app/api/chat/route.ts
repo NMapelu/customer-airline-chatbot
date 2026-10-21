@@ -3,7 +3,7 @@ import { createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream
 import { z } from 'zod';
 import { getChatSession } from '@/lib/chat-session';
 import { sourcesFrom, streamAnswer } from '@/lib/rag/answer';
-import { CHAT_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
+import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
@@ -85,6 +85,7 @@ export async function POST(req: Request) {
   try {
     const decision = await decide({
       model,
+      checkModel: openai(CHECK_MODEL),
       embeddingModel: openai.embedding(EMBEDDING_MODEL),
       supabase,
       role,
