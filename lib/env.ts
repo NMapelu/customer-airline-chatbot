@@ -10,10 +10,6 @@ const serverEnvSchema = z.object({
   // The service-role key is never used by the web app.
   SUPABASE_URL: supabaseUrlSchema,
   SUPABASE_ANON_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
-  // Development-only test user (see lib/supabase/dev-user.ts). Ignored outside `npm run dev`.
-  DEV_USER_EMAIL: z.string().optional(),
-  DEV_USER_PASSWORD: z.string().optional(),
-  DEV_USER_TOTP_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
