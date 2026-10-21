@@ -86,7 +86,7 @@ The similarity threshold in `lib/rag/config.ts` is chosen from the evaluation re
 
 `eval/questions.jsonl` holds 216 test questions in the categories of overview §13.1: answerable, not covered, off-topic, prompt injection, follow-ups, staff-content leakage, and agent questions (skipped until agent mode in Phase 9). `npm run eval` sends each one through the same pipeline as the chat, signed in as the development test user, so retrieval goes through RLS. An LLM judge checks that every answer's facts are in its passages.
 
-It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A full run makes about 700 OpenAI calls on gpt-4o, which should come to well under 1 US dollar of credit. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
+It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A full run makes about 700 OpenAI calls, mostly on gpt-4o; estimated from token counts, that is roughly 4 US dollars of credit. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
 
 ### Temporary development test user
 
