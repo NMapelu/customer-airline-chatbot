@@ -2,17 +2,18 @@ import { redirect } from 'next/navigation';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// The link in the sign-up email (US-02). The email template sends the user here with a one-time
-// token hash; checking it confirms the email address. Then they sign in and enrol MFA.
-// The destination is fixed, so this can't be used as an open redirect.
+// Where the link in Supabase's default sign-up email lands (US-02). Supabase confirms the email
+// address when the link is opened, then sends the user here with a one-time code. In the browser
+// they signed up in, the code becomes a password-level session and they go straight on to set
+// up their authenticator. In another browser the code can't be used (it is tied to the sign-up
+// browser), but the email is already confirmed, so they are asked to sign in.
+// The destinations are fixed, so this can't be used as an open redirect.
 export async function GET(request: NextRequest) {
-  const tokenHash = request.nextUrl.searchParams.get('token_hash');
-  const type = request.nextUrl.searchParams.get('type');
-  if (!tokenHash || (type !== 'email' && type !== 'signup')) redirect('/login?notice=confirm-failed');
+  const code = request.nextUrl.searchParams.get('code');
+  if (!code) redirect('/login?notice=confirm-failed');
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({ type: 'email', token_hash: tokenHash });
-  if (error) redirect('/login?notice=confirm-failed');
-  // Confirming also signs the user in with a password-level session; proxy.ts takes them to enrolment.
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) redirect('/login?notice=confirmed');
   redirect('/mfa/enroll');
 }
