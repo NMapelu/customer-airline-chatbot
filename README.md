@@ -105,7 +105,7 @@ Conversations are saved and listed in the sidebar, newest first. Users can open,
 Do this once in the Supabase dashboard:
 
 1. **Authentication → Sign In / Providers → Email**: enabled, with **Confirm email** on.
-2. **Authentication → Policies → Passwords** (or the Email provider settings): minimum length **12**, and require **lowercase, uppercase letters and digits**. The sign-up form enforces the same rule.
+2. Optional, as a second layer: if your dashboard shows password settings (usually inside the **Email** provider panel from step 1), set the minimum length to **12** and require **lowercase, uppercase letters and digits**. The sign-up form already enforces this rule on the server.
 3. **Authentication → Multi-Factor**: **TOTP (App Authenticator)** enabled.
 4. **Authentication → URL Configuration**: set **Site URL** to `https://kq-policy-assistant.neema-mapelu.workers.dev`, and add these **Redirect URLs**:
    - `https://kq-policy-assistant.neema-mapelu.workers.dev/auth/confirm`
