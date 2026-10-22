@@ -116,6 +116,9 @@ jobs:
     name: LLM red team (promptfoo)
     # After the access tests, so the two don't share the chat's per-user rate limit.
     needs: access-control
+    # Each run sends about 13 questions through the chat, which spends OpenAI credit. It runs only
+    # while the repository variable ENABLE_OPENAI_CHECKS is 'true'.
+    if: vars.ENABLE_OPENAI_CHECKS == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -24,7 +24,11 @@ concurrency:
 jobs:
   eval:
     name: Evaluation against the §14 targets
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    # Spends OpenAI credit, so pull requests run it only while the repository variable
+    # ENABLE_OPENAI_CHECKS is 'true'. It can always be started by hand from the Actions tab.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.ENABLE_OPENAI_CHECKS == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: eval

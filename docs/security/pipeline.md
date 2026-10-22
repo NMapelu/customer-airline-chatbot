@@ -23,6 +23,10 @@ GitHub's CodeQL default setup (Security → Code scanning) runs alongside.
 - **Red team** (`redteam/promptfooconfig.yaml`, OWASP LLM01, LLM02, LLM07): prompt injection and jailbreaks are refused, fake policies aren't confirmed, the system prompt and staff procedures never come back, personal data isn't repeated. Checks are fixed rules, so the suite needs no model of its own.
 - **ZAP**: baseline (passive) on every preview and weekly on production; full (active) on staging, signed in. The full scan leaves out `/api/chat`, `/api/checklist`, `/settings`, `/auth` and `/mfa`, and submits no forms: attacking those would spend OpenAI credit or lock the test account. Their access rules are covered by the access tests instead.
 
+## Checks that spend OpenAI credit
+
+The red team and the evaluation call the chat model, so they run only while the repository variable `ENABLE_OPENAI_CHECKS` is `true` (Settings → Secrets and variables → Actions → Variables). While it is off, the red-team job shows as skipped and the evaluation runs only when started by hand from the Actions tab. Every other check is free.
+
 ## Environments and secrets
 
 | Where | Holds |
