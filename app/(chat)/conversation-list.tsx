@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { SearchIcon } from '@/components/icons';
 import type { ConversationSummary } from '@/lib/chat/history';
 import { TITLE_MAX } from '@/lib/chat/history';
 import { deleteConversationAction, renameConversationAction, searchConversationsAction } from './actions';
@@ -47,34 +48,34 @@ export function ConversationList({ conversations }: { conversations: Conversatio
       >
         <input
           type="search"
-          className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-2 py-1 text-sm"
+          className="sidebar-input flex-1"
           value={query}
           maxLength={100}
           aria-label="Search your conversations"
           placeholder="Search conversations"
           onChange={(e) => (e.target.value ? setQuery(e.target.value) : clear())}
         />
-        <button type="submit" disabled={pending} className="text-xs text-blue-700 underline">
-          Search
+        <button type="submit" disabled={pending} className="btn btn-primary btn-sm px-2" aria-label="Search">
+          <SearchIcon />
         </button>
       </form>
       {error && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-[#ff7385]">
           {error}
         </p>
       )}
       {results && (
-        <p className="text-xs text-gray-600">
+        <p className="px-1 text-xs text-zinc-400">
           {results.length === 0 ? 'No conversations match.' : `${results.length} found.`}{' '}
-          <button type="button" onClick={clear} className="underline">
+          <button type="button" onClick={clear} className="text-white underline">
             Show all
           </button>
         </p>
       )}
       {!results && conversations.length === 0 ? (
-        <p className="text-sm text-gray-500">No conversations yet.</p>
+        <p className="px-1 text-sm text-zinc-500">No conversations yet. Your questions will appear here.</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {shown.map((c) => (
             <ConversationItem key={c.id} conversation={c} />
           ))}
@@ -110,7 +111,7 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary 
   };
 
   return (
-    <li className={`rounded px-2 py-1 text-sm ${current ? 'bg-blue-100' : ''}`}>
+    <li className={`group rounded-lg px-2 py-1.5 text-sm ${current ? 'bg-[#1f1f24] ring-1 ring-[#c8102e]' : 'hover:bg-[#1f1f24]'}`}>
       {editing ? (
         <form
           onSubmit={(e) => {
@@ -120,14 +121,14 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary 
           className="flex gap-1"
         >
           <input
-            className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-1"
+            className="sidebar-input flex-1"
             value={title}
             maxLength={TITLE_MAX}
             aria-label="Conversation title"
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
           />
-          <button type="submit" disabled={pending} className="text-xs text-blue-700 underline">
+          <button type="submit" disabled={pending} className="text-xs font-semibold text-white underline">
             Save
           </button>
           <button
@@ -137,27 +138,33 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary 
               setTitle(conversation.title);
               setError(null);
             }}
-            className="text-xs text-gray-600 underline"
+            className="text-xs text-zinc-400 underline"
           >
             Cancel
           </button>
         </form>
       ) : (
-        <div className="flex items-start gap-1">
-          <Link href={href} className="min-w-0 flex-1" aria-current={current ? 'page' : undefined}>
-            <span className="block truncate">{conversation.title}</span>
-            <span className="block text-xs text-gray-500">{shortDate(conversation.updatedAt)}</span>
+        <>
+          <Link href={href} className="block" aria-current={current ? 'page' : undefined}>
+            <span className={`block truncate ${current ? 'text-white' : 'text-zinc-200'}`}>{conversation.title}</span>
           </Link>
-          <button type="button" onClick={() => setEditing(true)} disabled={pending} className="text-xs text-gray-600 underline">
-            Rename
-          </button>
-          <button type="button" onClick={remove} disabled={pending} className="text-xs text-red-700 underline">
-            Delete
-          </button>
-        </div>
+          {/* The date shares a row with Rename and Delete, so long titles keep the full width. The buttons show on hover or
+              keyboard focus, so the list stays calm; they are always shown on touch screens. */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-zinc-500">{shortDate(conversation.updatedAt)}</span>
+            <span className="flex gap-2 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+              <button type="button" onClick={() => setEditing(true)} disabled={pending} className="text-xs text-zinc-400 hover:text-white">
+                Rename
+              </button>
+              <button type="button" onClick={remove} disabled={pending} className="text-xs text-[#ff7385] hover:text-white">
+                Delete
+              </button>
+            </span>
+          </div>
+        </>
       )}
       {error && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-[#ff7385]">
           {error}
         </p>
       )}
