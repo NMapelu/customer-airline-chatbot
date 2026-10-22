@@ -25,7 +25,7 @@ export function sourcesFrom(chunks: RetrievedChunk[]): Source[] {
   for (const c of chunks) {
     if (seen.has(c.documentId)) continue;
     seen.add(c.documentId);
-    out.push({ title: c.title, section: c.section, url: c.sourceUrl, retrievedAt: c.retrievedAt, audience: c.audience });
+    out.push({ title: c.title, section: c.section, url: c.sourceUrl, retrievedAt: c.retrievedAt, audience: c.audience, illustrative: c.illustrative });
   }
   return out;
 }
