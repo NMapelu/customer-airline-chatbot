@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
+import { DISCLAIMER } from '@/lib/legal';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
@@ -190,6 +192,12 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
         />
         <p className="px-2 text-xs text-gray-500">
           Please don&apos;t share booking references, passport, card or medical details.
+        </p>
+        <p className="px-2 text-xs text-gray-500">
+          {DISCLAIMER}{' '}
+          <Link href="/privacy" className="underline">
+            Privacy
+          </Link>
         </p>
       </form>
     </div>

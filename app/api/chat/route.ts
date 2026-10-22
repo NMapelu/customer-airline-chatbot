@@ -11,6 +11,9 @@ import { decide } from '@/lib/rag/pipeline';
 import { escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
 import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
 import { customerWording } from '@/lib/rag/wording';
+import { audit } from '@/lib/security/audit';
+import { clientIp } from '@/lib/security/client-ip';
+import { withinLimit } from '@/lib/security/rate-limit';
 
 export const maxDuration = 30;
 
@@ -93,6 +96,12 @@ export async function POST(req: Request) {
   }
   if (!session) return jsonError(401, 'Please sign in to use the chat.');
 
+  // Rate limits (overview §10.8), before any model call: per user, and per IP address.
+  if (!(await withinLimit('CHAT_USER_LIMITER', session.user.id)) || !(await withinLimit('CHAT_IP_LIMITER', clientIp(req.headers)))) {
+    await audit(session.supabase, 'rate_limited', req.headers, 'chat');
+    return jsonError(429, "You're sending messages too quickly. Please wait a minute and try again.");
+  }
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, 'Invalid request.');
   const { id: conversationId } = parsed.data;
@@ -135,6 +144,7 @@ export async function POST(req: Request) {
       return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
     }
     if (decision.kind === 'escalation') {
+      if (decision.reason === 'blocked_staff') await audit(supabase, 'staff_content_blocked', req.headers);
       const text = escalationText(role, await getContactDetails(supabase));
       await saveMessage(supabase, conversationId, 'assistant', text);
       return fixedReply(text, { kind: 'escalation', piiMasked });

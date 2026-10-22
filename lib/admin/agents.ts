@@ -8,6 +8,13 @@ import type { SupabaseClient, User } from '@supabase/supabase-js';
 // About 100 years: Supabase has no permanent ban, so a deactivated account is banned for this long.
 const BAN_FOREVER = '876000h';
 
+// Admin actions go in the audit log too (overview §10.10). The service role writes the table
+// directly; nobody else can. Best effort: the action itself has already happened.
+async function auditAdmin(admin: SupabaseClient, userId: string, event: 'agent_invited' | 'agent_deactivated', detail: string) {
+  const { error } = await admin.from('audit_log').insert({ user_id: userId, event, detail });
+  if (error) console.error(`could not write the audit log: ${error.message}`);
+}
+
 export type InviteResult = { kind: 'invited' | 'resent'; userId: string; link: string };
 
 export async function findUserByEmail(admin: SupabaseClient, email: string): Promise<User | null> {
@@ -54,6 +61,7 @@ export async function inviteAgent(admin: SupabaseClient, email: string, site: st
     if (await hasAuthenticator(admin, existing)) throw new Error('this agent has already set up their account. They sign in on the sign-in page.');
     const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: existing.email! });
     if (error) throw new Error(`could not create a new link: ${error.message}`);
+    await auditAdmin(admin, existing.id, 'agent_invited', 'new setup link (admin script)');
     return { kind: 'resent', userId: existing.id, link: confirmLink(site, data.properties.hashed_token, 'magiclink') };
   }
 
@@ -67,6 +75,7 @@ export async function inviteAgent(admin: SupabaseClient, email: string, site: st
     await admin.auth.admin.deleteUser(userId);
     throw new Error(`could not give the account the agent role: ${update.error.message}`);
   }
+  await auditAdmin(admin, userId, 'agent_invited', 'admin script');
   return { kind: 'invited', userId, link: confirmLink(site, data.properties.hashed_token, 'invite') };
 }
 
@@ -80,6 +89,7 @@ export async function deactivateAgent(admin: SupabaseClient, email: string): Pro
   if (!isAgent(user)) throw new Error('this is not an agent account, so there is nothing to deactivate.');
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: { role: null }, ban_duration: BAN_FOREVER });
   if (error) throw new Error(`could not deactivate the account: ${error.message}`);
+  await auditAdmin(admin, user.id, 'agent_deactivated', 'admin script');
   return user.id;
 }
 
