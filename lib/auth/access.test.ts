@@ -54,6 +54,10 @@ test('the email confirmation link is reachable in every state', () => {
   for (const status of ALL) assert.deepEqual(accessFor('/auth/confirm', status), { action: 'allow' });
   // The privacy notice is linked from sign-up, so anyone can read it.
   for (const status of ALL) assert.deepEqual(accessFor('/privacy', status), { action: 'allow' });
+  // So is a shared answer, but nothing else under /s/.
+  for (const status of ALL) assert.deepEqual(accessFor('/s/0b9c6a3e-1f2d-4c5b-8a7e-6d5c4b3a2f10', status), { action: 'allow' });
+  assert.deepEqual(accessFor('/s/x/y', 'signed_out'), { action: 'redirect', to: '/login' });
+  assert.deepEqual(accessFor('/s', 'signed_out'), { action: 'redirect', to: '/login' });
 });
 
 test('no status other than aal2 is ever allowed onto a protected path', () => {
