@@ -4,6 +4,7 @@
 //   npm run eval                          all questions, current threshold
 //   npm run eval -- --category=uncovered  one or more categories (comma-separated)
 //   npm run eval -- --threshold=0.45      try another threshold
+//   npm run eval -- --ci                  also exit with an error if any §14 target is missed (CI gate)
 //
 // It signs in as the test users from .dev.vars (see the README), so retrieval goes through RLS
 // exactly as in the chat: customer questions as the customer test user, agent questions as the
@@ -16,7 +17,7 @@ import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, SIMILARITY_THRESHOLD, TOP_K }
 import { decide } from '../lib/rag/pipeline';
 import type { Role, Turn } from '../lib/rag/types';
 import { judgeGrounded } from '../lib/eval/judge';
-import { histogram, sweepThreshold, TARGETS, verdict, type Category, type EvalQuestion, type EvalResult } from '../lib/eval/score';
+import { histogram, missedTargets, sweepThreshold, TARGETS, verdict, type Category, type EvalQuestion, type EvalResult } from '../lib/eval/score';
 import { getServerEnv } from '../lib/env';
 import { devUserClient } from '../lib/supabase/dev-user';
 import sources from '../docs/sources.json';
@@ -24,6 +25,7 @@ import sources from '../docs/sources.json';
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 const threshold = arg('threshold') ? Number(arg('threshold')) : SIMILARITY_THRESHOLD;
 const onlyCategories = arg('category')?.split(',');
+const ci = process.argv.includes('--ci');
 if (!Number.isFinite(threshold)) throw new Error('--threshold must be a number');
 
 function fail(message: string): never {
@@ -66,8 +68,9 @@ const JUDGE_MODEL = 'gpt-4o';
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
 
 async function main() {
-  if (!existsSync('.dev.vars')) fail('.dev.vars not found. Set up the test user first (see the README).');
-  process.loadEnvFile('.dev.vars');
+  // CI passes the same values as environment variables instead of a .dev.vars file.
+  if (existsSync('.dev.vars')) process.loadEnvFile('.dev.vars');
+  else if (!ci) fail('.dev.vars not found. Set up the test user first (see the README).');
   const env = getServerEnv();
   const customerUser = {
     ...env,
@@ -160,6 +163,10 @@ async function main() {
   writeFileSync('eval/report.md', report(questions, results));
   console.log('\nWrote eval/report.md and eval/results.jsonl.');
   console.log(readFileSync('eval/report.md', 'utf8').split('\n## Failures')[0]);
+  if (ci) {
+    const missed = missedTargets(questions, results);
+    if (missed.length) fail(`below the overview §14 targets: ${missed.join('; ')}`);
+  }
 }
 
 function report(questions: EvalQuestion[], results: EvalResult[]): string {

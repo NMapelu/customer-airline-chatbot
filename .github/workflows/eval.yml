@@ -1,0 +1,64 @@
+name: Evaluation
+
+# Answer quality gate (overview §14): when a pull request changes the documents, the retrieval and
+# answer code or the evaluation itself, run the full evaluation and fail below the targets.
+# Each run costs about 4 USD of OpenAI credit, so it only runs when these files change.
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'lib/rag/**'
+      - 'lib/eval/**'
+      - 'eval/questions.jsonl'
+      - 'scripts/eval.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Evaluation against the §14 targets
+    # Spends OpenAI credit, so pull requests run it only while the repository variable
+    # ENABLE_OPENAI_CHECKS is 'true'. It can always be started by hand from the Actions tab.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.ENABLE_OPENAI_CHECKS == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: eval
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the evaluation
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DEV_USER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          DEV_USER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          DEV_USER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+          DEV_AGENT_EMAIL: ${{ secrets.TEST_AGENT_EMAIL }}
+          DEV_AGENT_PASSWORD: ${{ secrets.TEST_AGENT_PASSWORD }}
+          DEV_AGENT_TOTP_SECRET: ${{ secrets.TEST_AGENT_TOTP_SECRET }}
+        run: npm run eval -- --ci
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: |
+            eval/report.md
+            eval/results.jsonl
+          if-no-files-found: ignore

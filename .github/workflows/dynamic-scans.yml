@@ -1,0 +1,153 @@
+name: Dynamic scans
+
+# The checks that need a running site (overview §15.2), shared by preview.yml, release.yml and
+# nightly.yml: access-control tests, a ZAP scan and the promptfoo red-team suite. Every request is
+# made as the test accounts, which hold no real passenger data.
+
+on:
+  workflow_call:
+    inputs:
+      base-url:
+        description: The deployed site, for example https://kq-policy-assistant-staging.example.workers.dev
+        required: true
+        type: string
+      zap:
+        description: baseline (passive) or full (active, signed in)
+        required: true
+        type: string
+    secrets:
+      SUPABASE_URL:
+        required: true
+      SUPABASE_ANON_KEY:
+        required: true
+      TEST_CUSTOMER_EMAIL:
+        required: true
+      TEST_CUSTOMER_PASSWORD:
+        required: true
+      TEST_CUSTOMER_TOTP_SECRET:
+        required: true
+      TEST_AGENT_EMAIL:
+        required: true
+      TEST_AGENT_PASSWORD:
+        required: true
+      TEST_AGENT_TOTP_SECRET:
+        required: true
+
+permissions:
+  contents: read
+
+# Secrets are given only to the steps that sign in.
+env:
+  BASE_URL: ${{ inputs.base-url }}
+
+jobs:
+  access-control:
+    name: Access-control tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the access tests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+          TEST_AGENT_EMAIL: ${{ secrets.TEST_AGENT_EMAIL }}
+          TEST_AGENT_PASSWORD: ${{ secrets.TEST_AGENT_PASSWORD }}
+          TEST_AGENT_TOTP_SECRET: ${{ secrets.TEST_AGENT_TOTP_SECRET }}
+        run: npm run test:deployed
+
+  zap:
+    name: ZAP ${{ inputs.zap }} scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sign the test customer in
+        if: inputs.zap == 'full'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+        run: npx tsx tests/deployed/session-cookie.ts
+      - name: Scan
+        env:
+          ZAP_MODE: ${{ inputs.zap }}
+        run: |
+          mkdir -p zap && cp .zap/rules.tsv .zap/full-scan.yaml zap/ && chmod -R a+rwx zap
+          image=zaproxy/zap-stable@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6
+          if [ "$ZAP_MODE" = full ]; then
+            docker run --rm -v "$PWD/zap:/zap/wrk:rw" -e BASE_URL -e SESSION_COOKIE "$image" \
+              zap.sh -cmd -autorun /zap/wrk/full-scan.yaml
+          else
+            # -I: report every alert but let zap-gate.mjs decide what blocks.
+            docker run --rm -v "$PWD/zap:/zap/wrk:rw" "$image" \
+              zap-baseline.py -t "$BASE_URL" -c rules.tsv -J zap-report.json -r zap-report.html -I
+          fi
+      - name: Block on high-risk alerts
+        run: node scripts/ci/zap-gate.mjs zap/zap-report.json
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-${{ inputs.zap }}-${{ github.run_id }}
+          path: zap/zap-report.*
+          if-no-files-found: ignore
+
+  red-team:
+    name: LLM red team (promptfoo)
+    # After the access tests, so the two don't share the chat's per-user rate limit.
+    needs: access-control
+    # Each run sends about 13 questions through the chat, which spends OpenAI credit. It runs only
+    # while the repository variable ENABLE_OPENAI_CHECKS is 'true'.
+    if: vars.ENABLE_OPENAI_CHECKS == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sign the test customer in
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+        run: npx tsx tests/deployed/session-cookie.ts
+      - name: Run the attacks
+        working-directory: redteam
+        env:
+          PROMPTFOO_DISABLE_TELEMETRY: '1'
+          PROMPTFOO_DISABLE_UPDATE: '1'
+        run: npx -y promptfoo@0.124.1 eval -c promptfooconfig.yaml --no-cache --no-progress-bar --no-share -o results.json
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: red-team-${{ github.run_id }}
+          path: redteam/results.json
+          if-no-files-found: ignore

@@ -20,7 +20,8 @@
     "set-admin": "tsx scripts/set-admin.ts",
     "eval": "tsx scripts/eval.ts",
     "test": "node --import tsx --test \"lib/**/*.test.ts\"",
-    "test:integration": "node --import tsx --test --test-concurrency=1 \"tests/integration/*.test.ts\""
+    "test:integration": "node --import tsx --test --test-concurrency=1 \"tests/integration/*.test.ts\"",
+    "test:deployed": "node --import tsx --test --test-concurrency=1 \"tests/deployed/*.test.ts\""
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.83",
@@ -54,5 +55,10 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "overrides": {
+    "@node-minify/core": {
+      "glob": "^10.5.0"
+    }
   }
 }

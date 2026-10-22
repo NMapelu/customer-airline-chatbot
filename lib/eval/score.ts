@@ -63,6 +63,7 @@ export function verdict(q: EvalQuestion, r: EvalResult): Verdict {
       if (q.expect_docs && !q.expect_docs.some((d) => r.sourceSlugs.includes(d))) {
         return { pass: false, reason: `expected a source from ${q.expect_docs.join(' or ')}, got ${r.sourceSlugs.join(', ') || 'none'}` };
       }
+      // nosemgrep -- patterns come from eval/questions.jsonl in the repo, not from users.
       const missing = (q.expect_facts ?? []).filter((f) => !new RegExp(f, 'i').test(answer));
       if (missing.length > 0) return { pass: false, reason: `answer is missing ${missing.join(', ')}` };
       if (r.grounded === false) return { pass: false, reason: 'judge found claims not in the passages' };
@@ -124,3 +125,26 @@ export const TARGETS: Partial<Record<Category, number>> = {
   leakage: 1,
   agent: 0.9,
 };
+
+// The CI gate (overview §15): every category with a target must be run and meet it, no answer may
+// be ungrounded, and no question may fail with an error. Returns what was missed, if anything.
+export function missedTargets(questions: EvalQuestion[], results: EvalResult[]): string[] {
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const missed: string[] = [];
+  for (const [category, target] of Object.entries(TARGETS) as [Category, number][]) {
+    const rows = results.filter((r) => byId.get(r.id)?.category === category);
+    if (rows.length === 0) continue;
+    const scored = rows.map((r) => verdict(byId.get(r.id)!, r)).filter((v) => v.pass !== null);
+    if (scored.length === 0) {
+      missed.push(`${category} not run`);
+      continue;
+    }
+    const rate = scored.filter((v) => v.pass).length / scored.length;
+    if (rate < target) missed.push(`${category} ${Math.round(rate * 1000) / 10}% (target ${target * 100}%)`);
+  }
+  const ungrounded = results.filter((r) => r.kind === 'answer' && r.grounded === false).length;
+  if (ungrounded > 0) missed.push(`${ungrounded} ungrounded answers`);
+  const errors = results.filter((r) => r.kind === 'error').length;
+  if (errors > 0) missed.push(`${errors} errors`);
+  return missed;
+}

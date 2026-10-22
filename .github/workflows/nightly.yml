@@ -1,0 +1,93 @@
+name: Nightly
+
+# Continuous scanning of what is live (overview §15.3). Every night: OSV re-checks main's
+# dependencies (what production runs) against newly published advisories. Every Monday: ZAP
+# baseline, access tests and the red team against production. Any failure opens an issue.
+
+on:
+  schedule:
+    - cron: '17 2 * * *' # daily, 05:17 in Nairobi
+    - cron: '41 3 * * 1' # Mondays
+  workflow_dispatch:
+    inputs:
+      weekly:
+        description: Also run the production scans
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  osv:
+    name: OSV re-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Scan the bill of materials
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+      - run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0
+          "$(go env GOPATH)/bin/osv-scanner" scan source --sbom sbom.cdx.json --config osv-scanner.toml --format json > osv.json || true
+          node scripts/ci/osv-gate.mjs osv.json
+
+  production-scans:
+    name: Production scans
+    if: github.event.schedule == '41 3 * * 1' || inputs.weekly
+    uses: ./.github/workflows/dynamic-scans.yml
+    with:
+      base-url: https://kq-policy-assistant.neema-mapelu.workers.dev
+      zap: baseline
+    secrets:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+      TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+      TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+      TEST_AGENT_EMAIL: ${{ secrets.TEST_AGENT_EMAIL }}
+      TEST_AGENT_PASSWORD: ${{ secrets.TEST_AGENT_PASSWORD }}
+      TEST_AGENT_TOTP_SECRET: ${{ secrets.TEST_AGENT_TOTP_SECRET }}
+
+  report:
+    name: Open an issue on failure
+    needs: [osv, production-scans]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title='Nightly security scan found a problem'
+          body="A scheduled scan failed: $RUN_URL. Open the run to see which check and download its report."
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
