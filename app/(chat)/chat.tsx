@@ -179,7 +179,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
             </div>
           </div>
         )}
-        {messages.map((m) => (
+        {messages.map((m, index) => (
           <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`rounded-lg px-4 py-2 max-w-[80%] ${
@@ -200,6 +200,21 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
               {m.metadata?.sources && m.metadata.sources.length > 0 && <SourceList sources={m.metadata.sources} role={role} />}
               {role === 'agent' && m.role === 'assistant' && m.metadata?.customerWording !== undefined && (
                 <CustomerWording text={m.metadata.customerWording} />
+              )}
+              {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
+              {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-300 pt-2">
+                  {m.metadata!.followUps!.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => sendMessage({ text: q })}
+                      className="rounded-full border border-blue-300 bg-white px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>

@@ -11,6 +11,7 @@ import { decide } from '@/lib/rag/pipeline';
 import { escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
 import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
 import { customerWording } from '@/lib/rag/wording';
+import { suggestFollowUps } from '@/lib/rag/follow-ups';
 import { audit } from '@/lib/security/audit';
 import { clientIp } from '@/lib/security/client-ip';
 import { withinLimit } from '@/lib/security/rate-limit';
@@ -42,14 +43,14 @@ const jsonError = (status: number, error: string) => Response.json({ error }, { 
 
 const answerText = (message: ChatMessage) => message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
 
-// An agent's answer (US-33, US-34): the streamed handling steps, then the customer-ready wording
-// as message metadata once both are done, then the save. As for customers, a failed or cut-off
-// answer is not saved.
-function agentAnswer(
+// The streamed answer, then extra message metadata once both are done (an agent's customer-ready
+// wording, US-34; a passenger's suggested follow-ups, US-25), then the save. A failed or cut-off
+// answer gets no extras and is not saved, so the history never holds half an answer.
+function answerWithExtras(
   answer: ReturnType<typeof streamAnswer>['stream'],
   metadata: ChatMetadata,
-  wording: Promise<string | null>,
-  save: (text: string, customerWording: string | null) => Promise<void>,
+  extras: Promise<Partial<ChatMetadata>>,
+  save: (text: string, extra: Partial<ChatMetadata>) => Promise<void>,
 ) {
   const stream = createUIMessageStream<ChatMessage>({
     async execute({ writer }) {
@@ -70,11 +71,11 @@ function agentAnswer(
         writer.write({ type: 'finish' });
         return;
       }
-      const customerWordingText = await wording;
-      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, customerWording: customerWordingText } });
+      const extra = await extras;
+      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, ...extra } });
       writer.write({ type: 'finish' });
       try {
-        await save(text, customerWordingText);
+        await save(text, extra);
       } catch (error) {
         console.error('could not save the answer', error);
       }
@@ -154,31 +155,14 @@ export async function POST(req: Request) {
     const sources = sourcesFrom(decision.chunks, decision.standalone);
     const metadata: ChatMetadata = { kind: 'answer', sources, piiMasked };
     const result = streamAnswer(model, role, decision.chunks, turns);
-    if (role === 'agent') {
-      // Started now, so it is usually ready when the answer ends. It only sees public passages.
-      const wording = customerWording(model, decision.standalone, decision.chunks);
-      return agentAnswer(result.stream, metadata, wording, (text, customerWordingText) =>
-        saveMessage(supabase, conversationId, 'assistant', text, sources, customerWordingText),
-      );
-    }
-    return createUIMessageStreamResponse({
-      stream: toUIMessageStream<ToolSet, ChatMessage>({
-        stream: result.stream,
-        messageMetadata: ({ part }) => (part.type === 'start' ? metadata : undefined),
-        // Saved once the answer has finished, before the response closes. A failed or cut-off
-        // answer is not saved, so the history never holds half an answer.
-        async onEnd({ outcome, finishReason, responseMessage }) {
-          if (outcome.status !== 'completed' || finishReason === 'error') return;
-          const text = answerText(responseMessage);
-          if (!text.trim()) return;
-          try {
-            await saveMessage(supabase, conversationId, 'assistant', text, sources);
-          } catch (error) {
-            console.error('could not save the answer', error);
-          }
-        },
-      }),
-    });
+    // Started now, so they are usually ready when the answer ends. Both only see public passages.
+    const extras: Promise<Partial<ChatMetadata>> =
+      role === 'agent'
+        ? customerWording(model, decision.standalone, decision.chunks).then((customerWording) => ({ customerWording }))
+        : suggestFollowUps(openai(CHECK_MODEL), decision.standalone, decision.chunks).then((followUps) => ({ followUps }));
+    return answerWithExtras(result.stream, metadata, extras, (text, extra) =>
+      saveMessage(supabase, conversationId, 'assistant', text, sources, extra.customerWording ?? null),
+    );
   } catch (error) {
     console.error('chat request failed', error);
     return jsonError(500, 'Sorry, something went wrong. Please try again.');
