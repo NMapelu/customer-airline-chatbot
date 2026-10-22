@@ -1,4 +1,4 @@
-// The service-role client for the admin scripts (invite-agent, deactivate-agent). It reads
+// The service-role client for the admin scripts (invite-agent, deactivate-agent, set-admin). It reads
 // .env.ingest, the one file that may hold the service-role key: never .env.local, .dev.vars or
 // Cloudflare, because the web app must never have it (overview §10.3, §10.7).
 import { existsSync } from 'node:fs';
@@ -39,6 +39,6 @@ export function adminClient(needSite: boolean): { admin: SupabaseClient; site: s
 export function emailArgument(usage: string): string {
   const email = process.argv.slice(2).find((a) => !a.startsWith('--'));
   const parsed = z.email().safeParse(email?.trim());
-  if (!parsed.success) fail(`give the agent's email address. Usage: ${usage}`);
+  if (!parsed.success) fail(`give the account's email address. Usage: ${usage}`);
   return parsed.data;
 }
