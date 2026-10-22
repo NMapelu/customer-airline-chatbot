@@ -18,6 +18,8 @@ export const HOME: Record<Exclude<AuthStatus, 'error'>, string> = {
   aal2: '/',
 };
 
+// Readable by anyone, signed in or not (the privacy notice is linked from sign-up).
+const PUBLIC_PAGES = new Set(['/privacy']);
 const SIGNED_OUT_PAGES = new Set(['/login', '/signup']);
 // /welcome is where an invited agent chooses a password, before setting up an authenticator.
 // The page also checks that the session came from the invitation link (app/(auth)/welcome).
@@ -43,7 +45,7 @@ const redirect = (to: string): Access => ({ action: 'redirect', to });
 
 export function accessFor(pathname: string, status: AuthStatus): Access {
   // The email confirmation link signs the user in itself, whatever state they are in.
-  if (pathname === '/auth/confirm') return allow;
+  if (pathname === '/auth/confirm' || PUBLIC_PAGES.has(pathname)) return allow;
 
   // The sign-in pages stay reachable when the check fails, so nobody is locked in a redirect loop.
   if (SIGNED_OUT_PAGES.has(pathname)) {

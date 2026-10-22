@@ -246,6 +246,10 @@ test('an invited agent sets a password and an authenticator, then sees staff con
 
   // Set up now: no more links.
   await assert.rejects(inviteAgent(admin, email, SITE), /already set up/);
+
+  // Both links are in the audit log.
+  const logged = await admin.from('audit_log').select('event').eq('user_id', invite.userId);
+  assert.deepEqual(logged.data?.map((r) => r.event), ['agent_invited', 'agent_invited']);
 });
 
 test("a customer's account can't be turned into an agent account", async () => {
@@ -293,5 +297,46 @@ test('a deactivated agent is signed out everywhere and their old token gets no s
   // The token still says "agent" until it expires; the database checks the account itself.
   assert.ok((await retrieve(agent, embeddingOf(BAGGAGE), 'bags', 5)).every((c) => c.audience === 'public'));
   const signIn = await createClient(URL, ANON, options).auth.signInWithPassword({ email: 'agent@example.test', password });
+  assert.notEqual(signIn.error, null);
+  const logged = await admin.from('audit_log').select('event').eq('event', 'agent_deactivated').eq('user_id', created[1]);
+  assert.equal(logged.data?.length, 1);
+});
+
+test('audit entries are tied to the signed-in user, and nobody can read the log through the API', async () => {
+  const me = (await customer.auth.getUser()).data.user!.id;
+  assert.equal((await customer.rpc('log_event', { p_event: 'sign_in', p_ip: '203.0.113.0' })).error, null);
+  const logged = await admin.from('audit_log').select('user_id, ip').eq('event', 'sign_in').eq('user_id', me);
+  assert.deepEqual(logged.data, [{ user_id: me, ip: '203.0.113.0' }]);
+
+  const read = await customer.from('audit_log').select('id');
+  assert.ok(read.error || read.data?.length === 0, 'a user must not read the audit log');
+  const anon = createClient(URL, ANON, options);
+  assert.equal((await anon.rpc('log_event', { p_event: 'sign_in_failed' })).error, null);
+  // Events that need a signed-in user are dropped for anonymous callers.
+  const before = (await admin.from('audit_log').select('id', { count: 'exact', head: true }).eq('event', 'mfa_replaced')).count;
+  await anon.rpc('log_event', { p_event: 'mfa_replaced' });
+  assert.equal((await admin.from('audit_log').select('id', { count: 'exact', head: true }).eq('event', 'mfa_replaced')).count, before);
+});
+
+test('a customer deletes their account with a fresh code, and all their rows go with it', async () => {
+  const leaving = await mfaUser('leaving@example.test');
+  const id = (await leaving.auth.getUser()).data.user!.id;
+  const conversation = crypto.randomUUID();
+  assert.ok(await openConversation(leaving, conversation, 'customer', 'My bags'));
+  await saveMessage(leaving, conversation, 'user', 'How many bags?');
+  await leaving.rpc('log_event', { p_event: 'sign_in' });
+
+  // Signed out of the API, nothing happens.
+  assert.notEqual((await createClient(URL, ANON, options).rpc('delete_my_account')).error, null);
+  // The test user signed in with a fresh code moments ago.
+  assert.equal((await leaving.rpc('delete_my_account')).error, null);
+
+  assert.notEqual((await admin.auth.admin.getUserById(id)).error, null);
+  assert.equal((await admin.from('conversations').select('id').eq('id', conversation)).data?.length, 0);
+  assert.equal((await admin.from('messages').select('id').eq('conversation_id', conversation)).data?.length, 0);
+  // Their audit entries stay for the retention period, no longer tied to them.
+  assert.equal((await admin.from('audit_log').select('id').eq('user_id', id)).data?.length, 0);
+  assert.ok((await admin.from('audit_log').select('id').eq('event', 'account_deleted')).data!.length > 0);
+  const signIn = await createClient(URL, ANON, options).auth.signInWithPassword({ email: 'leaving@example.test', password });
   assert.notEqual(signIn.error, null);
 });

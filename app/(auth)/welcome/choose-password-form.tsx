@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/schemas';
+import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
 import { choosePassword } from '../actions';
 import { Field, FormError, Submit } from '../ui';
 

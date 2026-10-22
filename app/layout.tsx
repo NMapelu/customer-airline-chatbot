@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
     "A policy assistant for Kenya Airways passengers and call-centre agents. Independent academic project, not affiliated with Kenya Airways.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Every page is rendered per request, so it can carry that request's CSP nonce (proxy.ts).
+// The pages depend on the signed-in user anyway, so nothing is lost.
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html
       lang="en"
