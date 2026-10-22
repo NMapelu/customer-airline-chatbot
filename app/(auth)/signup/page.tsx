@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useActionState } from 'react';
-import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/schemas';
+import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
 import { signUp } from '../actions';
 import { Field, FormError, Submit } from '../ui';
 
@@ -44,6 +44,16 @@ export default function SignUpPage() {
       <p className="text-xs text-gray-600">
         You&apos;ll also need an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.
       </p>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="consent" required className="mt-1" />
+        <span>
+          I have read the{' '}
+          <Link href="/privacy" target="_blank" className="text-blue-700 underline">
+            privacy notice
+          </Link>{' '}
+          and agree to my data being processed as it describes, including by OpenAI.
+        </span>
+      </label>
       <FormError message={state?.error} />
       <Submit pending={pending}>Create account</Submit>
       <p className="text-sm">

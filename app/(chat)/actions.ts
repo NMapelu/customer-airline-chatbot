@@ -1,8 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { deleteConversation, renameConversation, TITLE_MAX } from '@/lib/chat/history';
+import { audit } from '@/lib/security/audit';
 import { requireAal2 } from '@/lib/supabase/server';
 
 const idSchema = z.uuid();
@@ -35,6 +37,7 @@ export async function deleteConversationAction(id: string): Promise<ActionResult
   const { supabase } = await requireAal2();
   try {
     if (!(await deleteConversation(supabase, parsedId.data))) return { ok: false, error: 'Conversation not found.' };
+    await audit(supabase, 'conversation_deleted', await headers());
   } catch (error) {
     console.error('delete failed', error);
     return { ok: false, error: 'Sorry, something went wrong. Please try again.' };

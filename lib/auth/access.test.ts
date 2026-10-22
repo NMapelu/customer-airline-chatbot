@@ -52,6 +52,8 @@ test('each MFA page opens only at its own step', () => {
 
 test('the email confirmation link is reachable in every state', () => {
   for (const status of ALL) assert.deepEqual(accessFor('/auth/confirm', status), { action: 'allow' });
+  // The privacy notice is linked from sign-up, so anyone can read it.
+  for (const status of ALL) assert.deepEqual(accessFor('/privacy', status), { action: 'allow' });
 });
 
 test('no status other than aal2 is ever allowed onto a protected path', () => {
