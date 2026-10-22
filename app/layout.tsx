@@ -39,13 +39,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 }
 
 // The signed-in user's display preferences (overview §7.5), set on <html> so the first paint is
-// already right. Read from the session cookie without a call to Supabase: proxy.ts has checked the
-// session, and these only change how the page looks, so an unverified value can't grant anything.
+// already right. They travel in the verified session token's user_metadata claim. They only
+// change how the page looks; signed out, or on any error, the defaults apply.
 async function appearance() {
   try {
     const supabase = await createClient();
-    const { data } = await supabase.auth.getSession();
-    return appearanceFrom(data.session?.user.user_metadata);
+    const { data } = await supabase.auth.getClaims();
+    return appearanceFrom(data?.claims.user_metadata);
   } catch {
     return DEFAULT_APPEARANCE;
   }
