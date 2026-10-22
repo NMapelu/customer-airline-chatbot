@@ -17,6 +17,7 @@
     "dev-user": "tsx scripts/dev-user.ts",
     "invite-agent": "tsx scripts/invite-agent.ts",
     "deactivate-agent": "tsx scripts/deactivate-agent.ts",
+    "set-admin": "tsx scripts/set-admin.ts",
     "eval": "tsx scripts/eval.ts",
     "test": "node --import tsx --test \"lib/**/*.test.ts\"",
     "test:integration": "node --import tsx --test --test-concurrency=1 \"tests/integration/*.test.ts\""

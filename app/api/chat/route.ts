@@ -8,9 +8,10 @@ import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_C
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
-import { escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
+import { escalationSummary, escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
 import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
 import { customerWording } from '@/lib/rag/wording';
+import { suggestFollowUps } from '@/lib/rag/follow-ups';
 import { audit } from '@/lib/security/audit';
 import { clientIp } from '@/lib/security/client-ip';
 import { withinLimit } from '@/lib/security/rate-limit';
@@ -42,14 +43,14 @@ const jsonError = (status: number, error: string) => Response.json({ error }, { 
 
 const answerText = (message: ChatMessage) => message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
 
-// An agent's answer (US-33, US-34): the streamed handling steps, then the customer-ready wording
-// as message metadata once both are done, then the save. As for customers, a failed or cut-off
-// answer is not saved.
-function agentAnswer(
+// The streamed answer, then the save, then extra message metadata: an agent's customer-ready
+// wording (US-34), a passenger's suggested follow-ups (US-25) and the saved message's id. A failed
+// or cut-off answer gets no extras and is not saved, so the history never holds half an answer.
+function answerWithExtras(
   answer: ReturnType<typeof streamAnswer>['stream'],
   metadata: ChatMetadata,
-  wording: Promise<string | null>,
-  save: (text: string, customerWording: string | null) => Promise<void>,
+  extras: Promise<Partial<ChatMetadata>>,
+  save: (text: string, extra: Partial<ChatMetadata>) => Promise<string>,
 ) {
   const stream = createUIMessageStream<ChatMessage>({
     async execute({ writer }) {
@@ -70,14 +71,16 @@ function agentAnswer(
         writer.write({ type: 'finish' });
         return;
       }
-      const customerWordingText = await wording;
-      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, customerWording: customerWordingText } });
-      writer.write({ type: 'finish' });
+      const extra = await extras;
+      // Saved before the last metadata, so the id is only sent for an answer that was saved.
+      let messageId: string | undefined;
       try {
-        await save(text, customerWordingText);
+        messageId = await save(text, extra);
       } catch (error) {
         console.error('could not save the answer', error);
       }
+      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, ...extra, messageId } });
+      writer.write({ type: 'finish' });
     },
     onError: () => 'Sorry, something went wrong. Please try again.',
   });
@@ -139,46 +142,34 @@ export async function POST(req: Request) {
       // Not saved: it says nothing about the question, and the user will likely ask again.
       return fixedReply(UNAVAILABLE_TEXT, { kind: 'unavailable', piiMasked });
     }
+    // Saved replies carry their id, so the browser can send feedback on them (overview §7.12).
+    const messageId = crypto.randomUUID();
     if (decision.kind === 'refusal') {
-      await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT);
-      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+      await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT, [], null, { id: messageId, kind: 'refusal' });
+      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked, messageId });
     }
     if (decision.kind === 'escalation') {
       if (decision.reason === 'blocked_staff') await audit(supabase, 'staff_content_blocked', req.headers);
       const text = escalationText(role, await getContactDetails(supabase));
-      await saveMessage(supabase, conversationId, 'assistant', text);
-      return fixedReply(text, { kind: 'escalation', piiMasked });
+      await saveMessage(supabase, conversationId, 'assistant', text, [], null, { id: messageId, kind: 'escalation' });
+      const summary = role === 'customer' ? escalationSummary(decision.standalone) : '';
+      return fixedReply(text, { kind: 'escalation', piiMasked, messageId, ...(summary && { escalationSummary: summary }) });
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
     const sources = sourcesFrom(decision.chunks, decision.standalone);
     const metadata: ChatMetadata = { kind: 'answer', sources, piiMasked };
     const result = streamAnswer(model, role, decision.chunks, turns);
-    if (role === 'agent') {
-      // Started now, so it is usually ready when the answer ends. It only sees public passages.
-      const wording = customerWording(model, decision.standalone, decision.chunks);
-      return agentAnswer(result.stream, metadata, wording, (text, customerWordingText) =>
-        saveMessage(supabase, conversationId, 'assistant', text, sources, customerWordingText),
-      );
-    }
-    return createUIMessageStreamResponse({
-      stream: toUIMessageStream<ToolSet, ChatMessage>({
-        stream: result.stream,
-        messageMetadata: ({ part }) => (part.type === 'start' ? metadata : undefined),
-        // Saved once the answer has finished, before the response closes. A failed or cut-off
-        // answer is not saved, so the history never holds half an answer.
-        async onEnd({ outcome, finishReason, responseMessage }) {
-          if (outcome.status !== 'completed' || finishReason === 'error') return;
-          const text = answerText(responseMessage);
-          if (!text.trim()) return;
-          try {
-            await saveMessage(supabase, conversationId, 'assistant', text, sources);
-          } catch (error) {
-            console.error('could not save the answer', error);
-          }
-        },
-      }),
-    });
+    // Started now, so they are usually ready when the answer ends. Both only see public passages.
+    const extras: Promise<Partial<ChatMetadata>> =
+      role === 'agent'
+        ? customerWording(model, decision.standalone, decision.chunks).then((customerWording) => ({ customerWording }))
+        : suggestFollowUps(openai(CHECK_MODEL), decision.standalone, decision.chunks).then((followUps) => ({ followUps }));
+    return answerWithExtras(result.stream, metadata, extras, (text, extra) =>
+      saveMessage(supabase, conversationId, 'assistant', text, sources, extra.customerWording ?? null, { id: messageId, kind: 'answer' }).then(
+        () => messageId,
+      ),
+    );
   } catch (error) {
     console.error('chat request failed', error);
     return jsonError(500, 'Sorry, something went wrong. Please try again.');

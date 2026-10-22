@@ -10,7 +10,12 @@ const BAN_FOREVER = '876000h';
 
 // Admin actions go in the audit log too (overview §10.10). The service role writes the table
 // directly; nobody else can. Best effort: the action itself has already happened.
-async function auditAdmin(admin: SupabaseClient, userId: string, event: 'agent_invited' | 'agent_deactivated', detail: string) {
+async function auditAdmin(
+  admin: SupabaseClient,
+  userId: string,
+  event: 'agent_invited' | 'agent_deactivated' | 'admin_granted' | 'admin_removed',
+  detail: string,
+) {
   const { error } = await admin.from('audit_log').insert({ user_id: userId, event, detail });
   if (error) console.error(`could not write the audit log: ${error.message}`);
 }
@@ -104,4 +109,16 @@ export async function createTestAgent(admin: SupabaseClient, email: string, pass
   const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { role: 'agent' } });
   if (error) throw new Error(`could not create the agent test user: ${error.message}`);
   return 'created';
+}
+
+// The administrator role (overview §7.13). Only for passenger accounts: an agent account can't
+// also be an admin, so staff access and the dashboard stay separate (least privilege).
+export async function setAdmin(admin: SupabaseClient, email: string, grant: boolean): Promise<string> {
+  const user = await findUserByEmail(admin, email);
+  if (!user) throw new Error('no account with this email.');
+  if (isAgent(user)) throw new Error('this is an agent account; use a separate passenger account for the administrator.');
+  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: { role: grant ? 'admin' : null } });
+  if (error) throw new Error(`could not change the role: ${error.message}`);
+  await auditAdmin(admin, user.id, grant ? 'admin_granted' : 'admin_removed', 'admin script');
+  return user.id;
 }

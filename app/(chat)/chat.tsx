@@ -9,6 +9,8 @@ import { DISCLAIMER } from '@/lib/legal';
 import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 import { AnswerText } from './answer-text';
+import { AnswerActions } from './answer-actions';
+import { Feedback } from './feedback';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
 function errorText(error: Error): string {
@@ -88,9 +90,27 @@ function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
   );
 }
 
+// A Copy button that says "Copied" once the text is on the clipboard.
+function CopyButton({ text, className }: { text: string; className: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() =>
+        navigator.clipboard.writeText(text).then(
+          () => setCopied(true),
+          () => setCopied(false),
+        )
+      }
+    >
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 // US-34: what an agent can read to the caller, written from public passages only.
 function CustomerWording({ text }: { text: string | null }) {
-  const [copied, setCopied] = useState(false);
   if (text === null) {
     return (
       <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
@@ -103,18 +123,20 @@ function CustomerWording({ text }: { text: string | null }) {
     <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-black">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold">Customer-ready wording (public policy only)</p>
-        <button
-          type="button"
-          className="rounded border border-green-400 bg-white px-2 py-0.5 text-xs"
-          onClick={() =>
-            navigator.clipboard.writeText(text).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            )
-          }
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <CopyButton text={text} className="rounded border border-green-400 bg-surface px-2 py-0.5 text-xs" />
+      </div>
+      <p className="mt-1">{text}</p>
+    </div>
+  );
+}
+
+// Overview §7.11: the passenger's question, ready to paste into the KQ contact form.
+function EscalationSummary({ text }: { text: string }) {
+  return (
+    <div className="mt-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-black">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold">Your question, ready to send to Kenya Airways</p>
+        <CopyButton text={text} className="rounded border border-blue-400 bg-surface px-2 py-0.5 text-xs" />
       </div>
       <p className="mt-1">{text}</p>
     </div>
@@ -171,7 +193,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                   type="button"
                   disabled={busy}
                   onClick={() => sendMessage({ text: q.question })}
-                  className="rounded-full border border-gray-300 bg-white px-3 py-1 text-black hover:bg-gray-100"
+                  className="rounded-full border border-gray-300 bg-surface px-3 py-1 text-black hover:bg-gray-100"
                 >
                   {q.label}
                 </button>
@@ -179,7 +201,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
             </div>
           </div>
         )}
-        {messages.map((m) => (
+        {messages.map((m, index) => (
           <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`rounded-lg px-4 py-2 max-w-[80%] ${
@@ -201,6 +223,31 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
               {role === 'agent' && m.role === 'assistant' && m.metadata?.customerWording !== undefined && (
                 <CustomerWording text={m.metadata.customerWording} />
               )}
+              {role === 'customer' && m.metadata?.escalationSummary && <EscalationSummary text={m.metadata.escalationSummary} />}
+              {m.role === 'assistant' && !(busy && index === messages.length - 1) && (
+                <AnswerActions
+                  text={answerText(m)}
+                  sources={m.metadata?.sources ?? []}
+                  messageId={m.metadata?.messageId}
+                  canShare={role === 'customer'}
+                />
+              )}
+              {m.role === 'assistant' && m.metadata?.messageId && <Feedback messageId={m.metadata.messageId} initial={m.metadata.rating} />}
+              {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
+              {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-300 pt-2">
+                  {m.metadata!.followUps!.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => sendMessage({ text: q })}
+                      className="rounded-full border border-blue-300 bg-surface px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -217,7 +264,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           sendMessage({ text: input });
           setInput('');
         }}
-        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-white p-2 shadow-xl"
+        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-surface p-2 shadow-xl"
       >
         <input
           className="w-full p-2 text-black"

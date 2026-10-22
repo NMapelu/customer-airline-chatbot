@@ -33,12 +33,26 @@ export type Source = {
   passages?: { section: string | null; parts: PassagePart[] }[];
 };
 
+// What a saved assistant message was. 'unavailable' replies aren't saved.
+export type MessageKind = 'answer' | 'refusal' | 'escalation';
+
+export type Rating = 'up' | 'down';
+
 export type ChatMetadata = {
-  kind?: 'answer' | 'refusal' | 'escalation' | 'unavailable';
+  kind?: MessageKind | 'unavailable';
   sources?: Source[];
   // Agent answers only (US-34): what the agent can read to the caller, from public passages only.
   // null when there is none (no public passage applies, or it couldn't be written).
   customerWording?: string | null;
+  // Passenger answers only (US-25): 2–3 questions the knowledge base can answer, shown as buttons.
+  // Shown under the latest answer only, so they aren't saved.
+  followUps?: string[];
+  // Passenger escalations only (overview §7.11): their question, ready to copy. Not saved.
+  escalationSummary?: string;
+  // The saved message's id, sent once it is saved, for feedback and sharing.
+  messageId?: string;
+  // The user's own rating of this answer, if any (overview §7.12).
+  rating?: Rating;
   // True when personal details were hidden before the message reached OpenAI (R7).
   piiMasked?: boolean;
 };

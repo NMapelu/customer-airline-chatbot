@@ -21,6 +21,9 @@ export default function PrivacyPage() {
           <li>Your email address and password (the password is stored only as a secure hash).</li>
           <li>The authenticator app you set up for two-step sign-in.</li>
           <li>Your conversations: your questions and the assistant&apos;s answers, with the sources it used.</li>
+          <li>Your ratings of answers (helpful or not, and the reason you chose), if you give any.</li>
+          <li>Links you create to share an answer, and when they expire.</li>
+          <li>Your display settings (colour scheme and text size).</li>
           <li>
             Security records: sign-ins, failed attempts, authenticator changes and deletions, with the time and a
             shortened IP address. They never include your messages, passwords or codes.
@@ -34,6 +37,10 @@ export default function PrivacyPage() {
         <p>
           Only to answer your questions about Kenya Airways policies, to keep your conversation history, and to keep
           the service and your account secure. Your consent when you create the account is the basis for this.
+        </p>
+        <p>
+          To improve the answers, the administrator sees totals, the questions the assistant couldn&apos;t answer and
+          answers rated unhelpful from the last 30 days, without your email address or any other account details.
         </p>
       </section>
 
@@ -68,6 +75,9 @@ export default function PrivacyPage() {
         <h2 className="text-lg font-semibold">How long we keep it</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>Conversations: 12 months after your last message in them, then deleted automatically.</li>
+          <li>Ratings: as long as the answer they are about.</li>
+          <li>Shared links: they stop working after 30 days or when you stop sharing them, and are then deleted.</li>
+          <li>Trip descriptions for the pre-travel checklist: not stored.</li>
           <li>Security records: 12 months, then deleted automatically.</li>
           <li>Your account: until you delete it.</li>
         </ul>
