@@ -151,7 +151,7 @@ export async function POST(req: Request) {
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
-    const sources = sourcesFrom(decision.chunks);
+    const sources = sourcesFrom(decision.chunks, decision.standalone);
     const metadata: ChatMetadata = { kind: 'answer', sources, piiMasked };
     const result = streamAnswer(model, role, decision.chunks, turns);
     if (role === 'agent') {

@@ -1,4 +1,5 @@
 import { streamText, type LanguageModel } from 'ai';
+import { highlightPassage } from './passages';
 import { answerInstructions } from './prompts';
 import type { RetrievedChunk, Role, Source, Turn } from './types';
 
@@ -18,14 +19,17 @@ export function streamAnswer(model: LanguageModel, role: Role, chunks: Retrieved
   });
 }
 
-// One source per document, in retrieval order (R4). Built from stored chunk data, not the model.
-export function sourcesFrom(chunks: RetrievedChunk[]): Source[] {
-  const seen = new Set<string>();
-  const out: Source[] = [];
+// One source per document, in retrieval order (R4), with the passages used from it and the
+// sentences that match `question` marked. Built from stored chunk data, not the model.
+export function sourcesFrom(chunks: RetrievedChunk[], question = ''): Source[] {
+  const byDocument = new Map<string, Source>();
   for (const c of chunks) {
-    if (seen.has(c.documentId)) continue;
-    seen.add(c.documentId);
-    out.push({ title: c.title, section: c.section, url: c.sourceUrl, retrievedAt: c.retrievedAt, audience: c.audience, illustrative: c.illustrative });
+    let source = byDocument.get(c.documentId);
+    if (!source) {
+      source = { title: c.title, section: c.section, url: c.sourceUrl, retrievedAt: c.retrievedAt, audience: c.audience, illustrative: c.illustrative, passages: [] };
+      byDocument.set(c.documentId, source);
+    }
+    source.passages!.push({ section: c.section, parts: highlightPassage(c.content, question) });
   }
-  return out;
+  return [...byDocument.values()];
 }

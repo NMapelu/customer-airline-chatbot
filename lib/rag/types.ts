@@ -17,6 +17,9 @@ export type RetrievedChunk = {
   similarity: number;
 };
 
+// A piece of a source passage; `highlight` marks the sentences that best match the question (US-22).
+export type PassagePart = { text: string; highlight: boolean };
+
 // What the browser gets under each answer (R4). Built from stored chunks, never from the model.
 export type Source = {
   title: string;
@@ -26,6 +29,8 @@ export type Source = {
   audience: 'public' | 'staff';
   // A sample staff procedure written for this project, not a real KQ document (overview §9.1a).
   illustrative?: boolean;
+  // The stored passages the answer used from this document, for the preview (overview §7.6).
+  passages?: { section: string | null; parts: PassagePart[] }[];
 };
 
 export type ChatMetadata = {

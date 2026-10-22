@@ -83,6 +83,10 @@ const sourceSchema = z.object({
   retrievedAt: z.string().nullable(),
   audience: z.enum(['public', 'staff']),
   illustrative: z.boolean().optional(),
+  // Answers saved before Phase 11 have no passages.
+  passages: z
+    .array(z.object({ section: z.string().nullable(), parts: z.array(z.object({ text: z.string(), highlight: z.boolean() })) }))
+    .optional(),
 });
 const sourcesSchema = z.array(sourceSchema).catch([]);
 
