@@ -11,9 +11,9 @@ Each criterion with its evidence, as of 2026-10-23. **Met** means the evidence i
 | 5 | History saved, listed, resumable and deletable per user | Met | Integration tests "a customer's conversation is saved, read back in order, and listed" and "the owner can rename and permanently delete a conversation" |
 | 6 | RLS tests prove no user can reach another user's data | Met | `supabase/tests/rls.test.sql` (pgTAP, runs in CI on every PR); integration test "another user can't read, add to, rename or delete someone's conversation" |
 | 7 | No secret in the browser bundle or the repository | Partly met | `npm run check-env` blocks a build that would bundle a secret (every deploy); Gitleaks over the full history and the bundle scan ran clean on the Phase 12 branch. **Missing:** both running in CI on `main`, which comes with the Phase 12 pull request |
-| 8 | Publicly reachable on Cloudflare Workers; works in current desktop and mobile browsers | Met | https://kq-policy-assistant.neema-mapelu.workers.dev; screenshots on a desktop browser and a phone (to add, see below) |
+| 8 | Publicly reachable on Cloudflare Workers; works in current desktop and mobile browsers | Met | https://kq-policy-assistant.neema-mapelu.workers.dev (securityheaders.com grade A+ on 2026-10-23); screenshots on a desktop browser and a phone (to add, see below) |
 | 9 | CI passes all quality, security and evaluation gates on `main` | Partly met | Quality gates (lint, types, unit tests, corpus check, build, schema lint, RLS and integration tests) pass on `main`, and CodeQL runs on every PR. **Missing:** the security and evaluation gates in the Phase 12 pull request, parked until funds allow |
-| 10 | Manual OWASP Top 10 and LLM Top 10 review finds no unresolved high issue | Met (awaiting sign-off) | `docs/security/owasp-review.md`: two findings fixed, five low or medium items open with reasons |
+| 10 | Manual OWASP Top 10 and LLM Top 10 review finds no unresolved high issue | Met (signed off 2026-10-23) | `docs/security/owasp-review.md`: two findings fixed, five low or medium items open with reasons |
 | 11 | The production release passed every scan in §15.1 and §15.2, and continuous scanning is active | Not met yet | Waits on the Phase 12 pull request (pipeline, dynamic scans, nightly re-scans) |
 | 12 | Each security principle can be demonstrated | Met | See the table below |
 
@@ -32,5 +32,4 @@ Each criterion with its evidence, as of 2026-10-23. **Met** means the evidence i
 These need Neema's own screen, so they are listed in `notes/phase-13/setup-steps.md`:
 
 - Screenshots for criteria 1 and 8 (sign-up with MFA, chat on desktop and on a phone).
-- The securityheaders.com result for the live site.
 - The final evaluation run (criterion 2), once there is OpenAI credit.
