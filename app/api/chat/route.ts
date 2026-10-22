@@ -8,8 +8,9 @@ import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_C
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
-import { escalationText, REFUSAL_TEXT } from '@/lib/rag/prompts';
+import { escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
 import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
+import { customerWording } from '@/lib/rag/wording';
 
 export const maxDuration = 30;
 
@@ -35,6 +36,50 @@ function fixedReply(text: string, metadata: ChatMetadata) {
 }
 
 const jsonError = (status: number, error: string) => Response.json({ error }, { status });
+
+const answerText = (message: ChatMessage) => message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+
+// An agent's answer (US-33, US-34): the streamed handling steps, then the customer-ready wording
+// as message metadata once both are done, then the save. As for customers, a failed or cut-off
+// answer is not saved.
+function agentAnswer(
+  answer: ReturnType<typeof streamAnswer>['stream'],
+  metadata: ChatMetadata,
+  wording: Promise<string | null>,
+  save: (text: string, customerWording: string | null) => Promise<void>,
+) {
+  const stream = createUIMessageStream<ChatMessage>({
+    async execute({ writer }) {
+      let finished: ChatMessage | null = null;
+      const parts = toUIMessageStream<ToolSet, ChatMessage>({
+        stream: answer,
+        sendFinish: false,
+        messageMetadata: ({ part }) => (part.type === 'start' ? metadata : undefined),
+        onEnd({ outcome, finishReason, responseMessage }) {
+          if (outcome.status === 'completed' && finishReason !== 'error') finished = responseMessage;
+        },
+      });
+      const reader = parts.getReader();
+      for (let next = await reader.read(); !next.done; next = await reader.read()) writer.write(next.value);
+
+      const text = finished ? answerText(finished).trim() : '';
+      if (!text) {
+        writer.write({ type: 'finish' });
+        return;
+      }
+      const customerWordingText = await wording;
+      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, customerWording: customerWordingText } });
+      writer.write({ type: 'finish' });
+      try {
+        await save(text, customerWordingText);
+      } catch (error) {
+        console.error('could not save the answer', error);
+      }
+    },
+    onError: () => 'Sorry, something went wrong. Please try again.',
+  });
+  return createUIMessageStreamResponse({ stream });
+}
 
 // Request lifecycle, overview §8.2 steps 3–9 (steps 4–7 live in lib/rag/pipeline.ts).
 export async function POST(req: Request) {
@@ -81,6 +126,10 @@ export async function POST(req: Request) {
       turns,
       threshold: SIMILARITY_THRESHOLD,
     });
+    if (decision.kind === 'unavailable') {
+      // Not saved: it says nothing about the question, and the user will likely ask again.
+      return fixedReply(UNAVAILABLE_TEXT, { kind: 'unavailable', piiMasked });
+    }
     if (decision.kind === 'refusal') {
       await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT);
       return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
@@ -95,6 +144,13 @@ export async function POST(req: Request) {
     const sources = sourcesFrom(decision.chunks);
     const metadata: ChatMetadata = { kind: 'answer', sources, piiMasked };
     const result = streamAnswer(model, role, decision.chunks, turns);
+    if (role === 'agent') {
+      // Started now, so it is usually ready when the answer ends. It only sees public passages.
+      const wording = customerWording(model, decision.standalone, decision.chunks);
+      return agentAnswer(result.stream, metadata, wording, (text, customerWordingText) =>
+        saveMessage(supabase, conversationId, 'assistant', text, sources, customerWordingText),
+      );
+    }
     return createUIMessageStreamResponse({
       stream: toUIMessageStream<ToolSet, ChatMessage>({
         stream: result.stream,
@@ -103,7 +159,7 @@ export async function POST(req: Request) {
         // answer is not saved, so the history never holds half an answer.
         async onEnd({ outcome, finishReason, responseMessage }) {
           if (outcome.status !== 'completed' || finishReason === 'error') return;
-          const text = responseMessage.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+          const text = answerText(responseMessage);
           if (!text.trim()) return;
           try {
             await saveMessage(supabase, conversationId, 'assistant', text, sources);

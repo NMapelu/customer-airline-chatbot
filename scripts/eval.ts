@@ -5,15 +5,16 @@
 //   npm run eval -- --category=uncovered  one or more categories (comma-separated)
 //   npm run eval -- --threshold=0.45      try another threshold
 //
-// It signs in as the test user from .dev.vars (see the README), so retrieval goes
-// through RLS exactly as in the chat. Agent questions are skipped until agent mode (Phase 9).
+// It signs in as the test users from .dev.vars (see the README), so retrieval goes through RLS
+// exactly as in the chat: customer questions as the customer test user, agent questions as the
+// agent test user. Without an agent test user, agent questions are skipped.
 // Full answers go to eval/results.jsonl, which git ignores: answers can quote KQ's text.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createOpenAI } from '@ai-sdk/openai';
 import { sourcesFrom, streamAnswer } from '../lib/rag/answer';
 import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, SIMILARITY_THRESHOLD, TOP_K } from '../lib/rag/config';
 import { decide } from '../lib/rag/pipeline';
-import type { Turn } from '../lib/rag/types';
+import type { Role, Turn } from '../lib/rag/types';
 import { judgeGrounded } from '../lib/eval/judge';
 import { histogram, sweepThreshold, TARGETS, verdict, type Category, type EvalQuestion, type EvalResult } from '../lib/eval/score';
 import { getServerEnv } from '../lib/env';
@@ -68,12 +69,35 @@ async function main() {
   if (!existsSync('.dev.vars')) fail('.dev.vars not found. Set up the test user first (see the README).');
   process.loadEnvFile('.dev.vars');
   const env = getServerEnv();
-  const supabase = await devUserClient({
+  const customerUser = {
     ...env,
     DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
     DEV_USER_PASSWORD: process.env.DEV_USER_PASSWORD,
     DEV_USER_TOTP_SECRET: process.env.DEV_USER_TOTP_SECRET,
-  });
+  };
+  const agentUser = process.env.DEV_AGENT_TOTP_SECRET
+    ? {
+        ...env,
+        DEV_USER_EMAIL: process.env.DEV_AGENT_EMAIL,
+        DEV_USER_PASSWORD: process.env.DEV_AGENT_PASSWORD,
+        DEV_USER_TOTP_SECRET: process.env.DEV_AGENT_TOTP_SECRET,
+      }
+    : null;
+  // Signs in again when the session is near expiry (devUserClient caches it until then).
+  const clientFor = async (role: Role) => {
+    const client = await devUserClient(role === 'agent' ? agentUser! : customerUser);
+    // Keeps the agent session active: staff content needs activity in the last 30 minutes.
+    if (role === 'agent') await client.rpc('touch_agent_session');
+    return client;
+  };
+  await clientFor('customer');
+  if (agentUser) {
+    const agent = await clientFor('agent');
+    const { data } = await agent.auth.getUser();
+    if (data.user?.app_metadata?.role !== 'agent') fail('DEV_AGENT_EMAIL is not an agent account. Create it with npm run invite-agent -- --test-user.');
+  } else {
+    console.log('No agent test user in .dev.vars, so agent questions are skipped (see the README).');
+  }
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
   const model = openai(CHAT_MODEL);
   const embeddingModel = openai.embedding(EMBEDDING_MODEL);
@@ -90,10 +114,13 @@ async function main() {
 
   const results = await pool(questions, 4, async (q, i): Promise<EvalResult> => {
     const base = { id: q.id, category: q.category, topSimilarity: null, sourceSlugs: [], retrievedStaff: false, answer: null, grounded: null };
-    if (q.audience === 'agent') return { ...base, kind: 'skipped', note: 'needs an agent user (Phase 9)' };
+    const role: Role = q.audience === 'agent' ? 'agent' : 'customer';
+    if (role === 'agent' && !agentUser) return { ...base, kind: 'skipped', note: 'no agent test user (see the README)' };
     try {
+      const supabase = await clientFor(role);
       const turns: Turn[] = [...(q.history ?? []), { role: 'user', text: q.question }];
-      const decision = await decide({ model, checkModel, embeddingModel, supabase, role: 'customer', turns, threshold });
+      const decision = await decide({ model, checkModel, embeddingModel, supabase, role, turns, threshold });
+      if (decision.kind === 'unavailable') return { ...base, kind: 'error', note: 'OpenAI could not be reached' };
       if (decision.kind === 'refusal') return { ...base, kind: 'refusal' };
       const topSimilarity = Math.max(...decision.retrieved.map((c) => c.similarity), 0);
       const retrievedStaff = decision.retrieved.some((c) => c.audience === 'staff');
@@ -106,7 +133,7 @@ async function main() {
       );
       if (decision.kind === 'escalation') return { ...base, kind: 'escalation', topSimilarity, retrievedStaff, standalone, searchQuery, retrievedSlugs, note: decision.reason };
 
-      const answer = await streamAnswer(model, 'customer', decision.chunks, turns).text;
+      const answer = await streamAnswer(model, role, decision.chunks, turns).text;
       const judged = await judgeGrounded(judge, answer, decision.chunks);
       const sourceSlugs = sourcesFrom(decision.chunks).map((s) => slugs.get(s.title) ?? s.title);
       return {

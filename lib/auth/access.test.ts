@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { accessFor, type AuthStatus } from './access';
+import { accessFor, agentNeedsCode, type AuthStatus } from './access';
 
 const ALL: AuthStatus[] = ['signed_out', 'needs_enrol', 'needs_verify', 'aal2', 'error'];
 
@@ -60,4 +60,25 @@ test('no status other than aal2 is ever allowed onto a protected path', () => {
       assert.notDeepEqual(accessFor(path, status), { action: 'allow' }, `${status} ${path}`);
     }
   }
+});
+
+test('the invited-agent password page is open only before an authenticator is set up', () => {
+  assert.deepEqual(accessFor('/welcome', 'needs_enrol'), { action: 'allow' });
+  assert.deepEqual(accessFor('/welcome', 'signed_out'), { action: 'redirect', to: '/login' });
+  assert.deepEqual(accessFor('/welcome', 'needs_verify'), { action: 'redirect', to: '/mfa/verify' });
+  assert.deepEqual(accessFor('/welcome', 'aal2'), { action: 'redirect', to: '/' });
+  assert.deepEqual(accessFor('/welcome', 'error'), { action: 'deny', status: 503 });
+});
+
+test('an agent enters a new code once the last one is over 8 hours old', () => {
+  const now = Date.UTC(2026, 9, 22, 12);
+  const at = (hoursAgo: number) => Math.floor((now - hoursAgo * 3600 * 1000) / 1000);
+  assert.equal(agentNeedsCode([{ method: 'password', timestamp: at(1) }, { method: 'totp', timestamp: at(1) }], now), false);
+  assert.equal(agentNeedsCode([{ method: 'totp', timestamp: at(7.9) }], now), false);
+  assert.equal(agentNeedsCode([{ method: 'totp', timestamp: at(8.1) }], now), true);
+  // The newest code counts.
+  assert.equal(agentNeedsCode([{ method: 'totp', timestamp: at(9) }, { method: 'totp', timestamp: at(2) }], now), false);
+  // No code in this session at all (fail-safe).
+  assert.equal(agentNeedsCode([{ method: 'password', timestamp: at(0) }], now), true);
+  assert.equal(agentNeedsCode([], now), true);
 });

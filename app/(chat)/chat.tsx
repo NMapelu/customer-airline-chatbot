@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import type { ChatMessage, Source } from '@/lib/rag/types';
+import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
 function errorText(error: Error): string {
@@ -23,7 +23,7 @@ const checkedOn = (date: string) =>
 // Only https links are rendered as links.
 const safeUrl = (url: string | null) => (url && url.startsWith('https://') ? url : null);
 
-function SourceList({ sources }: { sources: Source[] }) {
+function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
   return (
     <div className="mt-2 border-t border-gray-300 pt-2 text-xs text-gray-700">
       <p className="font-semibold">Sources</p>
@@ -41,6 +41,8 @@ function SourceList({ sources }: { sources: Source[] }) {
                 <span>{label}</span>
               )}
               {s.audience === 'staff' && <span className="ml-1 font-semibold">(Internal)</span>}
+              {s.audience === 'staff' && s.illustrative && <span className="ml-1 italic">Sample procedure</span>}
+              {role === 'agent' && s.audience === 'public' && <span className="ml-1 font-semibold">(Public)</span>}
               {s.retrievedAt && <span className="ml-1 text-gray-500">checked {checkedOn(s.retrievedAt)}</span>}
             </li>
           );
@@ -49,6 +51,48 @@ function SourceList({ sources }: { sources: Source[] }) {
     </div>
   );
 }
+
+// US-34: what an agent can read to the caller, written from public passages only.
+function CustomerWording({ text }: { text: string | null }) {
+  const [copied, setCopied] = useState(false);
+  if (text === null) {
+    return (
+      <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
+        <p className="font-semibold">Customer-ready wording</p>
+        <p>None for this answer: no public policy covers it. Don&apos;t read the internal steps to the caller.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-black">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold">Customer-ready wording (public policy only)</p>
+        <button
+          type="button"
+          className="rounded border border-green-400 bg-white px-2 py-0.5 text-xs"
+          onClick={() =>
+            navigator.clipboard.writeText(text).then(
+              () => setCopied(true),
+              () => setCopied(false),
+            )
+          }
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="mt-1">{text}</p>
+    </div>
+  );
+}
+
+// Overview §7.14: common call types, one click away.
+const AGENT_QUICK_STARTS = [
+  { label: 'Refund request', question: 'A caller wants a refund for their ticket. How do I handle it?' },
+  { label: 'Missed connection', question: 'A caller missed their connection because their first KQ flight was late. What do I do?' },
+  { label: 'Lost bag', question: 'A caller says their checked bag did not arrive. How do I take the report?' },
+  { label: 'Wheelchair request', question: 'A caller needs wheelchair assistance for their flight. How do I arrange it?' },
+  { label: 'Mileage claim', question: 'A caller says Asante Rewards miles are missing from a past flight. How do I handle the claim?' },
+];
 
 // Only the conversation id and the new question go to the server; it keeps the history itself.
 const transport = new DefaultChatTransport<ChatMessage>({
@@ -61,7 +105,7 @@ const transport = new DefaultChatTransport<ChatMessage>({
 });
 
 // One conversation. `id` is its address (/c/<id>); the server creates it on the first question.
-export function Chat({ id, initialMessages }: { id: string; initialMessages: ChatMessage[] }) {
+export function Chat({ id, role, initialMessages }: { id: string; role: Role; initialMessages: ChatMessage[] }) {
   const router = useRouter();
   const { messages, sendMessage, status, error } = useChat<ChatMessage>({
     id,
@@ -76,10 +120,28 @@ export function Chat({ id, initialMessages }: { id: string; initialMessages: Cha
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
-        {messages.length === 0 && (
+        {messages.length === 0 && role === 'customer' && (
           <p className="mx-auto max-w-md text-center text-sm text-gray-500">
             Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance.
           </p>
+        )}
+        {messages.length === 0 && role === 'agent' && (
+          <div className="mx-auto max-w-md text-center text-sm text-gray-600">
+            <p>Describe the caller&apos;s situation, or start with a common call:</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {AGENT_QUICK_STARTS.map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendMessage({ text: q.question })}
+                  className="rounded-full border border-gray-300 bg-white px-3 py-1 text-black hover:bg-gray-100"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -95,7 +157,10 @@ export function Chat({ id, initialMessages }: { id: string; initialMessages: Cha
                   We hid what looked like personal details in your message before processing it.
                 </p>
               )}
-              {m.metadata?.sources && m.metadata.sources.length > 0 && <SourceList sources={m.metadata.sources} />}
+              {m.metadata?.sources && m.metadata.sources.length > 0 && <SourceList sources={m.metadata.sources} role={role} />}
+              {role === 'agent' && m.role === 'assistant' && m.metadata?.customerWording !== undefined && (
+                <CustomerWording text={m.metadata.customerWording} />
+              )}
             </div>
           </div>
         ))}
@@ -119,7 +184,7 @@ export function Chat({ id, initialMessages }: { id: string; initialMessages: Cha
           value={input}
           maxLength={1000}
           aria-label="Your question"
-          placeholder="Ask about a Kenya Airways policy..."
+          placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
           onChange={(e) => setInput(e.target.value)}
           disabled={busy}
         />
