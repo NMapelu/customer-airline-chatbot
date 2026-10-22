@@ -43,14 +43,14 @@ const jsonError = (status: number, error: string) => Response.json({ error }, { 
 
 const answerText = (message: ChatMessage) => message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
 
-// The streamed answer, then extra message metadata once both are done (an agent's customer-ready
-// wording, US-34; a passenger's suggested follow-ups, US-25), then the save. A failed or cut-off
-// answer gets no extras and is not saved, so the history never holds half an answer.
+// The streamed answer, then the save, then extra message metadata: an agent's customer-ready
+// wording (US-34), a passenger's suggested follow-ups (US-25) and the saved message's id. A failed
+// or cut-off answer gets no extras and is not saved, so the history never holds half an answer.
 function answerWithExtras(
   answer: ReturnType<typeof streamAnswer>['stream'],
   metadata: ChatMetadata,
   extras: Promise<Partial<ChatMetadata>>,
-  save: (text: string, extra: Partial<ChatMetadata>) => Promise<void>,
+  save: (text: string, extra: Partial<ChatMetadata>) => Promise<string>,
 ) {
   const stream = createUIMessageStream<ChatMessage>({
     async execute({ writer }) {
@@ -72,13 +72,15 @@ function answerWithExtras(
         return;
       }
       const extra = await extras;
-      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, ...extra } });
-      writer.write({ type: 'finish' });
+      // Saved before the last metadata, so the id is only sent for an answer that was saved.
+      let messageId: string | undefined;
       try {
-        await save(text, extra);
+        messageId = await save(text, extra);
       } catch (error) {
         console.error('could not save the answer', error);
       }
+      writer.write({ type: 'message-metadata', messageMetadata: { ...metadata, ...extra, messageId } });
+      writer.write({ type: 'finish' });
     },
     onError: () => 'Sorry, something went wrong. Please try again.',
   });
@@ -140,16 +142,18 @@ export async function POST(req: Request) {
       // Not saved: it says nothing about the question, and the user will likely ask again.
       return fixedReply(UNAVAILABLE_TEXT, { kind: 'unavailable', piiMasked });
     }
+    // Saved replies carry their id, so the browser can send feedback on them (overview §7.12).
+    const messageId = crypto.randomUUID();
     if (decision.kind === 'refusal') {
-      await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT);
-      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked });
+      await saveMessage(supabase, conversationId, 'assistant', REFUSAL_TEXT, [], null, { id: messageId, kind: 'refusal' });
+      return fixedReply(REFUSAL_TEXT, { kind: 'refusal', piiMasked, messageId });
     }
     if (decision.kind === 'escalation') {
       if (decision.reason === 'blocked_staff') await audit(supabase, 'staff_content_blocked', req.headers);
       const text = escalationText(role, await getContactDetails(supabase));
-      await saveMessage(supabase, conversationId, 'assistant', text);
+      await saveMessage(supabase, conversationId, 'assistant', text, [], null, { id: messageId, kind: 'escalation' });
       const summary = role === 'customer' ? escalationSummary(decision.standalone) : '';
-      return fixedReply(text, { kind: 'escalation', piiMasked, ...(summary && { escalationSummary: summary }) });
+      return fixedReply(text, { kind: 'escalation', piiMasked, messageId, ...(summary && { escalationSummary: summary }) });
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
@@ -162,7 +166,9 @@ export async function POST(req: Request) {
         ? customerWording(model, decision.standalone, decision.chunks).then((customerWording) => ({ customerWording }))
         : suggestFollowUps(openai(CHECK_MODEL), decision.standalone, decision.chunks).then((followUps) => ({ followUps }));
     return answerWithExtras(result.stream, metadata, extras, (text, extra) =>
-      saveMessage(supabase, conversationId, 'assistant', text, sources, extra.customerWording ?? null),
+      saveMessage(supabase, conversationId, 'assistant', text, sources, extra.customerWording ?? null, { id: messageId, kind: 'answer' }).then(
+        () => messageId,
+      ),
     );
   } catch (error) {
     console.error('chat request failed', error);

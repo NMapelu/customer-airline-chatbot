@@ -9,6 +9,8 @@ import { DISCLAIMER } from '@/lib/legal';
 import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 import { AnswerText } from './answer-text';
+import { AnswerActions } from './answer-actions';
+import { Feedback } from './feedback';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
 function errorText(error: Error): string {
@@ -222,6 +224,15 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                 <CustomerWording text={m.metadata.customerWording} />
               )}
               {role === 'customer' && m.metadata?.escalationSummary && <EscalationSummary text={m.metadata.escalationSummary} />}
+              {m.role === 'assistant' && !(busy && index === messages.length - 1) && (
+                <AnswerActions
+                  text={answerText(m)}
+                  sources={m.metadata?.sources ?? []}
+                  messageId={m.metadata?.messageId}
+                  canShare={role === 'customer'}
+                />
+              )}
+              {m.role === 'assistant' && m.metadata?.messageId && <Feedback messageId={m.metadata.messageId} initial={m.metadata.rating} />}
               {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
               {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-300 pt-2">
