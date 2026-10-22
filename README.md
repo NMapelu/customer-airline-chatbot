@@ -9,6 +9,19 @@ A secure web chatbot that answers Kenya Airways policy questions (baggage, refun
 
 Questions outside the policies are refused or handed off to KQ customer service, never guessed.
 
+## Architecture
+
+```
+Browser ──HTTPS──▶ Cloudflare Worker (Next.js via OpenNext)
+                     │  proxy.ts: session + MFA (AAL2) check, CSP nonce
+                     │  /api/chat: rate limit → PII mask → scope check → retrieval → confidence gate
+                     │             → staff-content guard → answer from passages only → sources
+                     ├──▶ Supabase (Auth with TOTP, Postgres + pgvector, Row Level Security)
+                     └──▶ OpenAI (GPT-4o, text-embedding-3-small; no tools, no internet)
+```
+
+The Worker holds only the Supabase anon key and acts as the signed-in user, so the database's RLS decides what each person can read. The knowledge base is loaded by an admin script (`npm run ingest`), the only place the service-role key is used.
+
 ## Tech stack
 
 Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · OpenAI (GPT-4o, text-embedding-3-small) · Supabase (Auth with TOTP MFA, Postgres, pgvector, Row Level Security) · Cloudflare Workers · GitHub Actions
@@ -162,6 +175,17 @@ The setup link lasts as long as Supabase's **Email OTP Expiration** (**Authentic
 4. For the agent questions: fill in `DEV_AGENT_EMAIL` (a different address) and `DEV_AGENT_PASSWORD` in `.dev.vars`, run `npm run invite-agent -- --test-user` to create it as an agent, then `npm run dev-user -- --agent`, which saves `DEV_AGENT_TOTP_SECRET`.
 
 These values stay in `.dev.vars` only. Never set them as Cloudflare secrets.
+
+## Deployment
+
+The live site is https://kq-policy-assistant.neema-mapelu.workers.dev. To deploy a change: apply any new migrations with `npx supabase db push`, then run `npm run deploy` (it refuses to build if a secret would end up in the bundle). The Worker's three secrets are described under [Secrets for the deployed site](#secrets-for-the-deployed-site). Sign-up and password emails go through a custom SMTP server set in the Supabase dashboard (Authentication → Emails → SMTP Settings), because Supabase's built-in sender only mails the project's own team.
+
+## Release review
+
+- [OWASP Top 10 and LLM Top 10 review](docs/security/owasp-review.md)
+- [Success criteria with evidence](docs/success-criteria.md)
+- [Threat model](docs/security/threat-model.md)
+- [Evaluation report](eval/report.md)
 
 ## Project management
 
