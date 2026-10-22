@@ -27,3 +27,12 @@ test('lists each document once, in retrieval order', () => {
   );
   assert.equal(sources[0].url, 'https://www.kenya-airways.com/b/');
 });
+
+test('each source carries its passages, with the matching sentences marked', () => {
+  const c = (id: string, section: string, content: string) => ({ ...chunk(id, section), content });
+  const [source] = sourcesFrom([c('b', 'One', 'Hello. Bags weigh 23 kg.'), c('b', 'Two', 'Pets travel in the hold.')], 'bags weight');
+  assert.deepEqual(source.passages, [
+    { section: 'One', parts: [{ text: 'Hello. ', highlight: false }, { text: 'Bags weigh 23 kg.', highlight: true }] },
+    { section: 'Two', parts: [{ text: 'Pets travel in the hold.', highlight: false }] },
+  ]);
+});
