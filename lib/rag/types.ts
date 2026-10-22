@@ -39,6 +39,9 @@ export type ChatMetadata = {
   // Agent answers only (US-34): what the agent can read to the caller, from public passages only.
   // null when there is none (no public passage applies, or it couldn't be written).
   customerWording?: string | null;
+  // Passenger answers only (US-25): 2–3 questions the knowledge base can answer, shown as buttons.
+  // Shown under the latest answer only, so they aren't saved.
+  followUps?: string[];
   // True when personal details were hidden before the message reached OpenAI (R7).
   piiMasked?: boolean;
 };
