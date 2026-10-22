@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { appearanceFrom } from '@/lib/appearance';
 import { listShares } from '@/lib/chat/shares';
 import { requireAal2 } from '@/lib/supabase/server';
 import { SignOutButton } from '../(auth)/sign-out-button';
+import { AppearanceSettings } from './appearance';
 import { DeleteAccount } from './delete-account';
 import { ReplaceAuthenticator } from './replace-authenticator';
 import { SharedLinks } from './shared-links';
@@ -25,6 +27,11 @@ export default async function SettingsPage() {
         <h2 className="text-lg font-semibold">Account</h2>
         <p className="text-sm">Email: {user.email}</p>
         <p className="text-sm">Account type: {role === 'agent' ? 'Call-centre agent' : 'Passenger'}</p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Display</h2>
+        <AppearanceSettings initial={appearanceFrom(user.user_metadata)} />
       </section>
 
       <section className="space-y-2">

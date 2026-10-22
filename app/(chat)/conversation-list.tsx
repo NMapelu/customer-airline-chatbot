@@ -47,7 +47,7 @@ export function ConversationList({ conversations }: { conversations: Conversatio
       >
         <input
           type="search"
-          className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+          className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-2 py-1 text-sm"
           value={query}
           maxLength={100}
           aria-label="Search your conversations"
@@ -120,7 +120,7 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary 
           className="flex gap-1"
         >
           <input
-            className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-1"
+            className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-1"
             value={title}
             maxLength={TITLE_MAX}
             aria-label="Conversation title"

@@ -31,7 +31,7 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
     return <p className="mt-2 text-xs text-gray-600">{rating === 'up' ? 'You found this helpful.' : 'Thanks, we will use this to improve.'}</p>;
   }
 
-  const button = 'rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
+  const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
   return (
     <div className="mt-2 text-xs">
       <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
         </button>
       </div>
       {choosing && (
-        <fieldset className="mt-2 rounded border border-gray-300 bg-white p-2 text-black">
+        <fieldset className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
           <legend className="px-1 text-gray-600">What went wrong? (optional)</legend>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FEEDBACK_REASONS) as FeedbackReason[]).map((key) => (
@@ -60,7 +60,7 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
                 type="button"
                 aria-pressed={reason === key}
                 onClick={() => setReason(reason === key ? null : key)}
-                className={`rounded-full border px-2 py-0.5 ${reason === key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'}`}
+                className={`rounded-full border px-2 py-0.5 ${reason === key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-surface'}`}
               >
                 {FEEDBACK_REASONS[key]}
               </button>
