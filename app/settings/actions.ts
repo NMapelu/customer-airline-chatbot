@@ -106,8 +106,10 @@ export async function saveAppearance(theme: string, textSize: string): Promise<{
   if (!parsed.success) return { ok: false, error: 'Please choose one of the options.' };
   const { supabase } = await requireAal2();
   const { error } = await supabase.auth.updateUser({ data: { theme: parsed.data.theme, text_size: parsed.data.textSize } });
-  if (error) {
-    console.error('could not save the display settings', error.message);
+  // A new session token carries the new values, which the root layout reads.
+  const refreshed = error ? null : await supabase.auth.refreshSession();
+  if (error || refreshed?.error) {
+    console.error('could not save the display settings', (error ?? refreshed?.error)?.message);
     return { ok: false, error: 'Sorry, something went wrong. Please try again.' };
   }
   revalidatePath('/', 'layout');
