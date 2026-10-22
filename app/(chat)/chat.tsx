@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { DISCLAIMER } from '@/lib/legal';
+import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
@@ -24,6 +25,30 @@ const checkedOn = (date: string) =>
 
 // Only https links are rendered as links.
 const safeUrl = (url: string | null) => (url && url.startsWith('https://') ? url : null);
+
+// US-22: the exact stored passage, with the sentences that match the question highlighted.
+// Rendered as text, never as HTML.
+function PassagePreview({ passages }: { passages: NonNullable<Source['passages']> }) {
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-blue-700">Show the exact wording</summary>
+      {passages.map((p, i) => (
+        <blockquote key={i} className="mt-1 whitespace-pre-line border-l-2 border-gray-300 pl-2 text-gray-800">
+          {p.section && <span className="block font-semibold">{p.section}</span>}
+          {p.parts.map((part, j) =>
+            part.highlight ? (
+              <mark key={j} className="bg-yellow-200 text-black">
+                {part.text}
+              </mark>
+            ) : (
+              <span key={j}>{part.text}</span>
+            ),
+          )}
+        </blockquote>
+      ))}
+    </details>
+  );
+}
 
 function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
   return (
@@ -46,6 +71,12 @@ function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
               {s.audience === 'staff' && s.illustrative && <span className="ml-1 italic">Sample procedure</span>}
               {role === 'agent' && s.audience === 'public' && <span className="ml-1 font-semibold">(Public)</span>}
               {s.retrievedAt && <span className="ml-1 text-gray-500">checked {checkedOn(s.retrievedAt)}</span>}
+              {isStale(s.retrievedAt) && (
+                <p className="text-amber-800">
+                  This was checked more than {STALE_AFTER_MONTHS} months ago. Please confirm on the KQ website.
+                </p>
+              )}
+              {s.passages && s.passages.length > 0 && <PassagePreview passages={s.passages} />}
             </li>
           );
         })}
