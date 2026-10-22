@@ -4,7 +4,8 @@
 // retrieval returns only the audiences a role allows, that an AAL1 session gets nothing, that
 // the escalation contact details come from the Contact Us document, and (Phase 8) that saved
 // conversations are private to their owner, and (Phase 9) the agent account rules: invitation,
-// idle timeout, customer-ready wording in the history and deactivation.
+// idle timeout, customer-ready wording in the history and deactivation, and (Phase 11) feedback,
+// search, shared answers and the admin insights.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -16,9 +17,13 @@ import {
   openConversation,
   recentTurns,
   renameConversation,
+  saveFeedback,
   saveMessage,
+  searchConversations,
 } from '../../lib/chat/history';
-import { deactivateAgent, inviteAgent } from '../../lib/admin/agents';
+import { createShare, getSharedAnswer, listShares, revokeShare } from '../../lib/chat/shares';
+import { deactivateAgent, inviteAgent, setAdmin } from '../../lib/admin/agents';
+import { getInsights } from '../../lib/admin/insights';
 import { getContactDetails } from '../../lib/rag/contact';
 import { retrieve } from '../../lib/rag/retrieve';
 import { devUserClient } from '../../lib/supabase/dev-user';
@@ -286,6 +291,100 @@ test("an agent's customer-ready wording is saved with the answer and shown again
     [undefined, 'We will trace your bag.', null],
   );
   assert.equal(loaded?.messages[1].metadata?.sources?.[0].illustrative, true);
+});
+
+// ---------------------------------------------------------------------------
+// Feedback, search, shared answers and insights (Phase 11).
+// ---------------------------------------------------------------------------
+async function answered(client: SupabaseClient, role: 'customer' | 'agent', question: string, kind: 'answer' | 'escalation' = 'answer') {
+  const conversation = crypto.randomUUID();
+  const answer = crypto.randomUUID();
+  assert.ok(await openConversation(client, conversation, role, question));
+  await saveMessage(client, conversation, 'user', question);
+  await saveMessage(client, conversation, 'assistant', 'Two bags of 23 kg.', [SOURCE], null, { id: answer, kind });
+  return { conversation, answer };
+}
+
+test('users rate their own answers once, and only their own', async () => {
+  const { answer } = await answered(customer, 'customer', 'Feedback question');
+  assert.equal(await saveFeedback(agent, answer, 'up', null), false);
+  assert.equal(await saveFeedback(customer, answer, 'down', 'incomplete'), true);
+  assert.equal(await saveFeedback(customer, answer, 'up', null), false);
+  // A reason only goes with a thumbs-down, and only a known one.
+  const other = await answered(customer, 'customer', 'Another feedback question');
+  await assert.rejects(async () => customer.from('message_feedback').insert({ message_id: other.answer, rating: 'up', reason: 'wrong' }).throwOnError());
+  await assert.rejects(async () => customer.from('message_feedback').insert({ message_id: other.answer, rating: 'down', reason: 'rude' }).throwOnError());
+  // Nobody can change or read anyone else's feedback.
+  const { data } = await agent.from('message_feedback').select('id').eq('message_id', answer);
+  assert.deepEqual(data, []);
+  const changed = await customer.from('message_feedback').update({ rating: 'up' }).eq('message_id', answer).select('id');
+  assert.ok(changed.error || changed.data?.length === 0);
+  const loaded = await loadConversation(customer, (await customer.from('messages').select('conversation_id').eq('id', answer).single()).data!.conversation_id);
+  assert.equal(loaded?.messages[1].metadata?.rating, 'down');
+  assert.equal(loaded?.messages[1].metadata?.messageId, answer);
+});
+
+test('search finds only the caller\'s own conversations, matching words literally', async () => {
+  const { conversation } = await answered(customer, 'customer', 'Surfboard 100% question');
+  assert.ok((await searchConversations(customer, 'surfboard')).some((c) => c.id === conversation));
+  assert.ok((await searchConversations(customer, '100%')).some((c) => c.id === conversation));
+  assert.ok(!(await searchConversations(customer, '1_0')).some((c) => c.id === conversation));
+  assert.deepEqual(await searchConversations(agent, 'surfboard'), []);
+});
+
+test('a shared answer shows only the question, answer and sources, until revoked', async () => {
+  const { answer } = await answered(customer, 'customer', 'Share this question');
+  assert.equal(await createShare(agent, answer), null);
+  const id = await createShare(customer, answer);
+  assert.ok(id);
+  const anon = createClient(URL, ANON, options);
+  const shared = await getSharedAnswer(anon, id!);
+  assert.deepEqual(Object.keys(shared!).sort(), ['answer', 'answeredAt', 'question', 'sources']);
+  assert.equal(shared?.question, 'Share this question');
+  assert.deepEqual(shared?.sources, [SOURCE]);
+  // The table itself is out of reach: anonymous users read nothing, others see no rows.
+  const anonRead = await anon.from('shared_answers').select('id');
+  assert.ok(anonRead.error || anonRead.data?.length === 0);
+  assert.deepEqual((await agent.from('shared_answers').select('id').eq('id', id!)).data, []);
+  // Users can't choose their own expiry or owner.
+  await assert.rejects(async () => customer.from('shared_answers').insert({ message_id: answer, expires_at: '2099-01-01' }).throwOnError());
+  assert.ok((await listShares(customer)).some((s) => s.id === id));
+  assert.equal(await revokeShare(agent, id!), false);
+  assert.equal(await revokeShare(customer, id!), true);
+  assert.equal(await getSharedAnswer(anon, id!), null);
+  // A revoked link can't be turned back on.
+  const undo = await customer.from('shared_answers').update({ revoked: false }).eq('id', id!).select('id');
+  assert.ok(undo.error || undo.data?.length === 0);
+  // Expired links stop working too.
+  const expiring = await createShare(customer, answer);
+  await admin.from('shared_answers').update({ expires_at: new Date(Date.now() - 1000).toISOString() }).eq('id', expiring!);
+  assert.equal(await getSharedAnswer(anon, expiring!), null);
+});
+
+test("agents can't share answers, even their own", async () => {
+  const { answer } = await answered(agent, 'agent', 'Agent share attempt');
+  assert.equal(await createShare(agent, answer), null);
+});
+
+test('only an administrator sees the insights, without user ids, and each visit is audited', async () => {
+  await answered(customer, 'customer', 'Can I bring an e-bike battery?', 'escalation');
+  assert.equal(await getInsights(customer), null);
+  const email = `admin-${Date.now()}@example.test`;
+  const adminUser = await mfaUser(email, 'admin');
+  // An agent account can't be made an admin.
+  await assert.rejects(setAdmin(admin, 'agent@example.test', true), /agent account/);
+  const insights = await getInsights(adminUser);
+  assert.ok(insights);
+  assert.ok(insights.gaps.some((g) => g.example === 'Can I bring an e-bike battery?'));
+  assert.ok((insights.kinds.answer ?? 0) > 0);
+  const text = JSON.stringify(insights);
+  for (const id of created) assert.ok(!text.includes(id), 'no user ids in the insights');
+  assert.ok(!text.includes('@example.test'), 'no emails in the insights');
+  const me = (await adminUser.auth.getUser()).data.user!.id;
+  const logged = await admin.from('audit_log').select('event').eq('user_id', me).eq('event', 'admin_viewed');
+  assert.equal(logged.data?.length, 1);
+  // An admin chats as a customer: no staff content.
+  assert.ok((await retrieve(adminUser, embeddingOf(BAGGAGE), 'bags', 5)).every((c) => c.audience === 'public'));
 });
 
 // Last: it deactivates the shared agent.

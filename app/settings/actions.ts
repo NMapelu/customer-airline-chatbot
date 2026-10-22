@@ -1,7 +1,10 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { TEXT_SIZES, THEMES } from '@/lib/appearance';
 import { newTotpFactor, type EnrolStart } from '@/lib/auth/mfa';
 import { codeSchema, factorIdSchema } from '@/lib/auth/schemas';
 import { TOO_MANY, tooManyAttempts } from '@/lib/security/attempts';
@@ -90,4 +93,25 @@ export async function deleteAccount(_prev: DeleteState, form: FormData): Promise
   // The account is gone, so this only clears the cookies.
   await supabase.auth.signOut({ scope: 'local' });
   redirect('/login?notice=account-deleted');
+}
+
+const appearanceSchema = z.object({
+  theme: z.enum(Object.keys(THEMES) as [keyof typeof THEMES]),
+  textSize: z.enum(Object.keys(TEXT_SIZES) as [keyof typeof TEXT_SIZES]),
+});
+
+// Overview §7.5: light or dark mode and text size, remembered with the user's account.
+export async function saveAppearance(theme: string, textSize: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = appearanceSchema.safeParse({ theme, textSize });
+  if (!parsed.success) return { ok: false, error: 'Please choose one of the options.' };
+  const { supabase } = await requireAal2();
+  const { error } = await supabase.auth.updateUser({ data: { theme: parsed.data.theme, text_size: parsed.data.textSize } });
+  // A new session token carries the new values, which the root layout reads.
+  const refreshed = error ? null : await supabase.auth.refreshSession();
+  if (error || refreshed?.error) {
+    console.error('could not save the display settings', (error ?? refreshed?.error)?.message);
+    return { ok: false, error: 'Sorry, something went wrong. Please try again.' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
 }

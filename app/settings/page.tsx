@@ -1,14 +1,19 @@
 import Link from 'next/link';
+import { appearanceFrom } from '@/lib/appearance';
+import { listShares } from '@/lib/chat/shares';
 import { requireAal2 } from '@/lib/supabase/server';
 import { SignOutButton } from '../(auth)/sign-out-button';
+import { AppearanceSettings } from './appearance';
 import { DeleteAccount } from './delete-account';
 import { ReplaceAuthenticator } from './replace-authenticator';
+import { SharedLinks } from './shared-links';
 
 const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 // Account and security settings (overview §7.4), and account deletion (§11).
 export default async function SettingsPage() {
-  const { user, role } = await requireAal2();
+  const { supabase, user, role } = await requireAal2();
+  const shares = role === 'agent' ? [] : await listShares(supabase);
   const authenticators = (user.factors ?? []).filter((f) => f.factor_type === 'totp' && f.status === 'verified');
 
   return (
@@ -25,6 +30,11 @@ export default async function SettingsPage() {
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Display</h2>
+        <AppearanceSettings initial={appearanceFrom(user.user_metadata)} />
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-semibold">Two-step sign-in</h2>
         <p className="text-sm">
           On. It can&apos;t be turned off. You sign in with your password and a code from:{' '}
@@ -32,6 +42,14 @@ export default async function SettingsPage() {
         </p>
         <ReplaceAuthenticator />
       </section>
+
+      {role !== 'agent' && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">Shared answers</h2>
+          <p className="text-sm">Links you shared stop working after 30 days, or straight away when you stop sharing them.</p>
+          <SharedLinks shares={shares} />
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Sign out</h2>
