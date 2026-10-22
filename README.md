@@ -55,6 +55,7 @@ npx wrangler secret put SUPABASE_ANON_KEY   # the anon / publishable key, never 
 | `npm run ingest` | Load the knowledge base into Supabase (needs `.env.ingest`) |
 | `npm run invite-agent -- <email>` | Create a call-centre agent account and print its one-time setup link (needs `.env.ingest`) |
 | `npm run deactivate-agent -- <email>` | Deactivate an agent: signs them out everywhere and blocks the account (needs `.env.ingest`) |
+| `npm run set-admin -- <email> [--remove]` | Give a passenger account the administrator role for `/admin`, or take it away (needs `.env.ingest`) |
 | `npm run dev-user` | Set up the test user that `npm run eval` signs in as (see below) |
 | `npm run eval` | Run the evaluation set and write `eval/report.md` (see below) |
 | `npm test` | Run the unit tests (Node's built-in test runner) |
@@ -178,6 +179,15 @@ Security principles, the threat model and scan results live in [`docs/security/`
 - **Retention:** a daily `pg_cron` job (`purge-expired-data`, 03:17 UTC) deletes conversations 12 months after their last activity and audit entries after 12 months.
 - **Account deletion:** Settings → *Delete my account*, with a code from the authenticator app. Agent accounts are removed by the administrator instead.
 - **Privacy notice:** `/privacy`, public. Sign-up needs consent to it; the notice version and time are saved in the account's `user_metadata.privacy_consent`. Change `PRIVACY_VERSION` in `lib/legal.ts` when the notice changes.
+
+### Experience features (Phase 11)
+
+- **Answers:** Markdown for skimming, the exact source passage on request, suggested follow-up questions, a copyable summary when a question is escalated, Copy, and thumbs up or down with reasons (`message_feedback`).
+- **History:** search across your own conversations (server-side, under RLS).
+- **Sharing:** passengers can share one question and answer as a read-only link (`/s/<id>`) that expires after 30 days and can be turned off in the chat or in Settings. Agents can't share.
+- **Display:** light or dark mode (follows the device by default) and text size, in Settings.
+- **Pre-travel checklist** (`/checklist`, passengers): one message about the trip, one checklist with sources; topics the knowledge base doesn't cover are listed with the contact details. *Save as PDF* prints the checklist and its sources only.
+- **Insights** (`/admin`, administrators): question volume, answer, escalation and refusal rates, most-cited documents, knowledge gaps and recent thumbs-down answers. No emails or ids; detail only for the last 30 days; each visit is audit-logged. Give the role with `npm run set-admin -- <email>`, then sign in again.
 
 ## Authorship
 
