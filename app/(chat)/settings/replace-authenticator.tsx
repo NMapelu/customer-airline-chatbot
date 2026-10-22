@@ -2,8 +2,8 @@
 
 import { useActionState, useState, useTransition } from 'react';
 import type { EnrolStart } from '@/lib/auth/mfa';
-import { FormError, Field, Submit } from '../(auth)/ui';
-import { QrCode } from '../(auth)/mfa/enroll/qr-code';
+import { FormError, Field, Submit } from '../../(auth)/ui';
+import { QrCode } from '../../(auth)/mfa/enroll/qr-code';
 import { finishReplacement, startReplacement } from './actions';
 
 // US-13: a code from the current app, then the new app's QR code and a code from it.
@@ -13,7 +13,7 @@ export function ReplaceAuthenticator() {
   const [state, action, pending] = useActionState(finishReplacement, undefined);
 
   if (state?.done) {
-    return <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-900">Done. Use the new app from now on.</p>;
+    return <p className="notice notice-ok">Done. Use the new app from now on.</p>;
   }
   if (!start?.ok) {
     return (
@@ -23,7 +23,7 @@ export function ReplaceAuthenticator() {
           const code = new FormData(e.currentTarget).get('currentCode');
           startTransition(async () => setStart(await startReplacement(typeof code === 'string' ? code : '')));
         }}
-        className="space-y-2 rounded border border-gray-300 p-3"
+        className="space-y-3 rounded-lg border border-line p-4"
       >
         <p className="text-sm font-medium">Replace my authenticator app</p>
         <Field label="Code from your current app" name="currentCode" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
@@ -33,7 +33,7 @@ export function ReplaceAuthenticator() {
     );
   }
   return (
-    <form action={action} className="space-y-3 rounded border border-gray-300 p-3">
+    <form action={action} className="space-y-3 rounded-lg border border-line p-4">
       <QrCode qr={start.qr} secret={start.secret} />
       <input type="hidden" name="factorId" value={start.factorId} />
       <Field label="Code from your new app" name="newCode" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
