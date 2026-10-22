@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
+import { SendIcon } from '@/components/icons';
 import { DISCLAIMER } from '@/lib/legal';
 import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
@@ -36,9 +37,9 @@ const safeUrl = (url: string | null) => (url && url.startsWith('https://') ? url
 function PassagePreview({ passages }: { passages: NonNullable<Source['passages']> }) {
   return (
     <details className="mt-1">
-      <summary className="cursor-pointer text-blue-700">Show the exact wording</summary>
+      <summary className="cursor-pointer font-medium text-brand">Show the exact wording</summary>
       {passages.map((p, i) => (
-        <blockquote key={i} className="mt-1 whitespace-pre-line border-l-2 border-gray-300 pl-2 text-gray-800">
+        <blockquote key={i} className="mt-1 whitespace-pre-line border-l-2 border-ok pl-2 text-foreground">
           {p.section && <span className="block font-semibold">{p.section}</span>}
           {p.parts.map((part, j) =>
             part.highlight ? (
@@ -57,25 +58,27 @@ function PassagePreview({ passages }: { passages: NonNullable<Source['passages']
 
 function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
   return (
-    <div className="mt-2 border-t border-gray-300 pt-2 text-xs text-gray-700">
-      <p className="font-semibold">Sources</p>
-      <ul className="mt-1 space-y-1">
+    <div className="mt-3 rounded-lg border border-line bg-background/60 p-3 text-xs text-muted">
+      <p className="flex items-center gap-2 font-semibold text-foreground">
+        Sources <span className="badge badge-ok">{sources.length}</span>
+      </p>
+      <ul className="mt-2 space-y-2">
         {sources.map((s, i) => {
           const label = s.section ? `${s.title}: ${s.section}` : s.title;
           const url = safeUrl(s.url);
           return (
             <li key={i}>
               {url ? (
-                <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
+                <a href={url} target="_blank" rel="noopener noreferrer" className="link">
                   {label}
                 </a>
               ) : (
-                <span>{label}</span>
+                <span className="font-medium text-foreground">{label}</span>
               )}
-              {s.audience === 'staff' && <span className="ml-1 font-semibold">(Internal)</span>}
-              {s.audience === 'staff' && s.illustrative && <span className="ml-1 italic">Sample procedure</span>}
-              {role === 'agent' && s.audience === 'public' && <span className="ml-1 font-semibold">(Public)</span>}
-              {s.retrievedAt && <span className="ml-1 text-gray-500">checked {checkedOn(s.retrievedAt)}</span>}
+              {s.audience === 'staff' && <span className="badge badge-brand ml-1.5">Internal</span>}
+              {s.audience === 'staff' && s.illustrative && <span className="badge badge-muted ml-1">Sample procedure</span>}
+              {role === 'agent' && s.audience === 'public' && <span className="badge badge-ok ml-1.5">Public</span>}
+              {s.retrievedAt && <span className="ml-1.5">checked {checkedOn(s.retrievedAt)}</span>}
               {isStale(s.retrievedAt) && (
                 <p className="text-amber-800">
                   This was checked more than {STALE_AFTER_MONTHS} months ago. Please confirm on the KQ website.
@@ -113,17 +116,17 @@ function CopyButton({ text, className }: { text: string; className: string }) {
 function CustomerWording({ text }: { text: string | null }) {
   if (text === null) {
     return (
-      <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
+      <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
         <p className="font-semibold">Customer-ready wording</p>
         <p>None for this answer: no public policy covers it. Don&apos;t read the internal steps to the caller.</p>
       </div>
     );
   }
   return (
-    <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-black">
+    <div className="mt-3 rounded-lg border border-ok bg-ok-soft p-3 text-sm text-foreground">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold">Customer-ready wording (public policy only)</p>
-        <CopyButton text={text} className="rounded border border-green-400 bg-surface px-2 py-0.5 text-xs" />
+        <p className="text-xs font-semibold text-ok">Customer-ready wording (public policy only)</p>
+        <CopyButton text={text} className="btn btn-ok btn-sm" />
       </div>
       <p className="mt-1">{text}</p>
     </div>
@@ -133,10 +136,10 @@ function CustomerWording({ text }: { text: string | null }) {
 // Overview §7.11: the passenger's question, ready to paste into the KQ contact form.
 function EscalationSummary({ text }: { text: string }) {
   return (
-    <div className="mt-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-black">
+    <div className="mt-3 rounded-lg border border-brand bg-brand-soft p-3 text-sm text-foreground">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold">Your question, ready to send to Kenya Airways</p>
-        <CopyButton text={text} className="rounded border border-blue-400 bg-surface px-2 py-0.5 text-xs" />
+        <p className="text-xs font-semibold text-brand">Your question, ready to send to Kenya Airways</p>
+        <CopyButton text={text} className="btn btn-danger btn-sm" />
       </div>
       <p className="mt-1">{text}</p>
     </div>
@@ -177,23 +180,29 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
-        {messages.length === 0 && role === 'customer' && (
-          <p className="mx-auto max-w-md text-center text-sm text-gray-500">
-            Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance.
-          </p>
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6">
+        {messages.length === 0 && (
+          <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {role === 'agent' ? 'What is the caller asking about?' : 'How can I help with your trip?'}
+            </h1>
+            <p className="mt-2 text-sm text-muted">
+              {role === 'agent'
+                ? "Describe the caller's situation, or start with a common call. Answers use public policies and internal procedures."
+                : 'Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
+            </p>
+          </div>
         )}
         {messages.length === 0 && role === 'agent' && (
-          <div className="mx-auto max-w-md text-center text-sm text-gray-600">
-            <p>Describe the caller&apos;s situation, or start with a common call:</p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <div className="mx-auto max-w-xl text-center text-sm">
+            <div className="flex flex-wrap justify-center gap-2">
               {AGENT_QUICK_STARTS.map((q) => (
                 <button
                   key={q.label}
                   type="button"
                   disabled={busy}
                   onClick={() => sendMessage({ text: q.question })}
-                  className="rounded-full border border-gray-300 bg-surface px-3 py-1 text-black hover:bg-gray-100"
+                  className="chip"
                 >
                   {q.label}
                 </button>
@@ -202,12 +211,17 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           </div>
         )}
         {messages.map((m, index) => (
-          <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={m.id} className={`mx-auto flex max-w-3xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                m.role === 'user' ? 'whitespace-pre-wrap bg-blue-500 text-white' : 'bg-gray-200 text-black'
-              }`}
+              className={
+                m.role === 'user'
+                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white'
+                  : 'card w-full max-w-[95%] rounded-tl-md px-4 py-3'
+              }
             >
+              {m.role === 'assistant' && (
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Policy Assistant</p>
+              )}
               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
               {m.role === 'user' ? (
                 m.parts.map((part, i) => (part.type === 'text' ? <span key={i}>{part.text}</span> : null))
@@ -215,7 +229,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                 <AnswerText text={answerText(m)} />
               )}
               {m.metadata?.piiMasked && (
-                <p className="mt-2 text-xs text-amber-800">
+                <p className={`mt-2 text-xs ${m.role === 'user' ? 'text-white/90' : 'text-amber-800'}`}>
                   We hid what looked like personal details in your message before processing it.
                 </p>
               )}
@@ -235,24 +249,39 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
               {m.role === 'assistant' && m.metadata?.messageId && <Feedback messageId={m.metadata.messageId} initial={m.metadata.rating} />}
               {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
               {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-300 pt-2">
+                <div className="mt-3 border-t border-line pt-3">
+                  <p className="mb-2 text-xs font-semibold text-muted">You could also ask</p>
+                  <div className="flex flex-wrap gap-2">
                   {m.metadata!.followUps!.map((q) => (
                     <button
                       key={q}
                       type="button"
                       onClick={() => sendMessage({ text: q })}
-                      className="rounded-full border border-blue-300 bg-surface px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
+                      className="chip"
                     >
                       {q}
                     </button>
                   ))}
+                  </div>
                 </div>
               )}
             </div>
           </div>
         ))}
+        {busy && messages.at(-1)?.role === 'user' && (
+          <div className="mx-auto flex max-w-3xl" role="status">
+            <div className="card flex items-center gap-2 px-4 py-3 text-sm text-muted">
+              <span className="flex gap-1" aria-hidden="true">
+                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e]" />
+                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
+                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
+              </span>
+              Checking the policies…
+            </div>
+          </div>
+        )}
         {error && (
-          <div role="alert" className="mx-auto max-w-2xl rounded-lg px-4 py-2 bg-red-100 text-red-800">
+          <div role="alert" className="notice notice-error mx-auto max-w-3xl">
             {errorText(error)}
           </div>
         )}
@@ -264,22 +293,25 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           sendMessage({ text: input });
           setInput('');
         }}
-        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-surface p-2 shadow-xl"
+        className="mx-auto w-full max-w-3xl px-4 pb-4"
       >
-        <input
-          className="w-full p-2 text-black"
-          value={input}
-          maxLength={1000}
-          aria-label="Your question"
-          placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={busy}
-        />
-        <p className="px-2 text-xs text-gray-500">
-          Please don&apos;t share booking references, passport, card or medical details.
-        </p>
-        <p className="px-2 text-xs text-gray-500">
-          {DISCLAIMER}{' '}
+        <div className="card flex items-center gap-2 p-2 shadow-lg focus-within:ring-2 focus-within:ring-[#c8102e]">
+          <input
+            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-foreground outline-none"
+            value={input}
+            maxLength={1000}
+            aria-label="Your question"
+            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
+            onChange={(e) => setInput(e.target.value)}
+            disabled={busy}
+          />
+          <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary" aria-label="Send">
+            <SendIcon />
+            <span className="hidden sm:inline">Send</span>
+          </button>
+        </div>
+        <p className="mt-2 px-1 text-center text-xs text-muted">
+          Please don&apos;t share booking references, passport, card or medical details. {DISCLAIMER}{' '}
           <Link href="/privacy" className="underline">
             Privacy
           </Link>
