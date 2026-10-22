@@ -19,7 +19,24 @@ export const HOME: Record<Exclude<AuthStatus, 'error'>, string> = {
 };
 
 const SIGNED_OUT_PAGES = new Set(['/login', '/signup']);
-const MFA_PAGES: Record<string, AuthStatus> = { '/mfa/enroll': 'needs_enrol', '/mfa/verify': 'needs_verify' };
+// /welcome is where an invited agent chooses a password, before setting up an authenticator.
+// The page also checks that the session came from the invitation link (app/(auth)/welcome).
+const MFA_PAGES: Record<string, AuthStatus> = { '/mfa/enroll': 'needs_enrol', '/welcome': 'needs_enrol', '/mfa/verify': 'needs_verify' };
+
+// Agents' shorter sessions (overview §7.14, §10.11). The database enforces the same limits in
+// staff_access() (supabase/migrations/20261022090000_agent_mode.sql).
+export const AGENT_IDLE_MINUTES = 30;
+export const AGENT_CODE_MAX_HOURS = 8;
+
+// True when an agent must enter an authenticator code again: the newest one in this session is
+// more than 8 hours old, or there is none. `methods` are the session's sign-in methods with
+// their times in seconds, as Supabase reports them (older tokens list bare method names).
+export type SignInMethod = string | { method: string; timestamp: number };
+
+export function agentNeedsCode(methods: SignInMethod[], now = Date.now()): boolean {
+  const newest = Math.max(0, ...methods.flatMap((m) => (typeof m === 'object' && m.method === 'totp' ? [m.timestamp * 1000] : [])));
+  return now - newest > AGENT_CODE_MAX_HOURS * 3600 * 1000;
+}
 
 const allow: Access = { action: 'allow' };
 const redirect = (to: string): Access => ({ action: 'redirect', to });

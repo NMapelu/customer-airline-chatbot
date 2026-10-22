@@ -36,7 +36,16 @@ export default async function ChatLayout({ children }: LayoutProps<'/'>) {
         <summary className="cursor-pointer text-sm font-semibold">Conversations</summary>
         <div className="mt-3">{sidebar}</div>
       </details>
-      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col">
+        {role === 'agent' && (
+          // Overview §7.14: always clear which rules apply. Agents can't switch to customer mode.
+          <div role="note" className="border-b border-amber-300 bg-amber-100 px-4 py-2 text-sm text-amber-950">
+            <strong>Agent mode.</strong> Answers include internal procedures marked <em>Internal</em>. Read callers only
+            the <em>Customer-ready wording</em>.
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

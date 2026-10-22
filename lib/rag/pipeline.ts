@@ -10,6 +10,8 @@ import type { RetrievedChunk, Role, Turn } from './types';
 
 export type Decision =
   | { kind: 'refusal' }
+  // OpenAI couldn't be reached for a check, so nothing is answered (overview §10.0 fail-safe).
+  | { kind: 'unavailable' }
   | { kind: 'escalation'; reason: 'no_evidence' | 'not_covered' | 'blocked_staff'; standalone: string; searchQuery: string; retrieved: RetrievedChunk[] }
   | { kind: 'answer'; standalone: string; searchQuery: string; retrieved: RetrievedChunk[]; chunks: RetrievedChunk[] };
 
@@ -29,7 +31,9 @@ export type PipelineInput = {
 export async function decide({ model, checkModel, embeddingModel, supabase, role, turns, threshold }: PipelineInput): Promise<Decision> {
   // 5. Scope check (R1) on the user's own words, then 4. rewrite a follow-up for retrieval.
   //    The check runs first because the rewrite could make an off-topic message look in scope.
-  if ((await checkScope(checkModel, turns)) === 'off_topic') return { kind: 'refusal' };
+  const scope = await checkScope(checkModel, turns, role);
+  if (scope === 'unavailable') return { kind: 'unavailable' };
+  if (scope === 'off_topic') return { kind: 'refusal' };
   const standalone = await rewriteQuestion(model, turns);
 
   // 6. Retrieval, under the user's own session and RLS: once with the question and once with it
@@ -51,8 +55,8 @@ export async function decide({ model, checkModel, embeddingModel, supabase, role
   }
   if (gate.kind === 'no_evidence') return { kind: 'escalation', reason: 'no_evidence', standalone, searchQuery, retrieved };
   //    Similar is not the same as answering: a model confirms the passages answer the question.
-  if ((await checkCoverage(checkModel, standalone, gate.chunks)) === 'not_covered') {
-    return { kind: 'escalation', reason: 'not_covered', standalone, searchQuery, retrieved };
-  }
+  const coverage = await checkCoverage(checkModel, standalone, gate.chunks);
+  if (coverage === 'unavailable') return { kind: 'unavailable' };
+  if (coverage === 'not_covered') return { kind: 'escalation', reason: 'not_covered', standalone, searchQuery, retrieved };
   return { kind: 'answer', standalone, searchQuery, retrieved, chunks: gate.chunks };
 }

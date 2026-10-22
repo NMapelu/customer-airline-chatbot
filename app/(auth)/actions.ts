@@ -3,10 +3,10 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { newTotpFactor, type EnrolStart } from '@/lib/auth/mfa';
-import { codeSchema, factorIdSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
+import { codeSchema, factorIdSchema, newPasswordSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
 import { HOME } from '@/lib/auth/access';
 import { getAuthState } from '@/lib/supabase/auth-state';
-import { createClient } from '@/lib/supabase/server';
+import { cameFromSetupLink, createClient } from '@/lib/supabase/server';
 
 // Sign-up, sign-in and MFA (overview §10.1, US-02 to US-04). Each action runs on the server with
 // the anon key; Supabase Auth checks the password and codes and sets the HTTP-only session cookies.
@@ -69,6 +69,29 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
   redirect(status === 'error' ? '/login' : HOME[status]);
 }
 
+// An invited agent chooses a password (US-32). Only for a session that came from the setup link
+// and has no authenticator yet: a stolen password-level session can't use this to change the password.
+export async function choosePassword(_prev: FormState, form: FormData): Promise<FormState> {
+  const parsed = newPasswordSchema.safeParse({
+    password: field(form, 'password'),
+    confirm: field(form, 'confirm'),
+  });
+  if (!parsed.success) {
+    return parsed.error.issues[0].path[0] === 'confirm'
+      ? { error: "The two passwords don't match." }
+      : { error: 'Please choose a stronger password (see the rule under the field).' };
+  }
+  const supabase = await createClient();
+  if (!(await cameFromSetupLink(supabase))) redirect('/');
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    if (error.code === 'weak_password' || error.code === 'same_password') return { error: 'Please choose a stronger password.' };
+    console.error('choosing a password failed', error.code, error.message);
+    return { error: "We couldn't save the password. Please try again." };
+  }
+  redirect('/mfa/enroll');
+}
+
 // Step 1 of enrolment (US-03): a new authenticator secret, shown as a QR code and a key.
 // Only for a signed-in user who has no verified authenticator yet; replacing one goes through
 // settings and needs a code from the current one.
@@ -109,6 +132,10 @@ export async function verifyCode(_prev: FormState, form: FormData): Promise<Form
 // US-14. Ends this browser's session only; other devices stay signed in.
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
+  // For an agent, the database stops serving staff content to this session's token at once
+  // (a no-op for customers). Signing out goes ahead even if this fails.
+  const ended = await supabase.rpc('end_agent_session');
+  if (ended.error) console.error('could not end the agent session', ended.error.message);
   await supabase.auth.signOut({ scope: 'local' });
   redirect('/login');
 }
