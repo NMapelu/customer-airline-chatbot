@@ -8,7 +8,7 @@ import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_C
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
-import { escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
+import { escalationSummary, escalationText, REFUSAL_TEXT, UNAVAILABLE_TEXT } from '@/lib/rag/prompts';
 import type { ChatMessage, ChatMetadata } from '@/lib/rag/types';
 import { customerWording } from '@/lib/rag/wording';
 import { suggestFollowUps } from '@/lib/rag/follow-ups';
@@ -148,7 +148,8 @@ export async function POST(req: Request) {
       if (decision.reason === 'blocked_staff') await audit(supabase, 'staff_content_blocked', req.headers);
       const text = escalationText(role, await getContactDetails(supabase));
       await saveMessage(supabase, conversationId, 'assistant', text);
-      return fixedReply(text, { kind: 'escalation', piiMasked });
+      const summary = role === 'customer' ? escalationSummary(decision.standalone) : '';
+      return fixedReply(text, { kind: 'escalation', piiMasked, ...(summary && { escalationSummary: summary }) });
     }
 
     // 8. Grounded answer, with its sources attached as message metadata (R4).
