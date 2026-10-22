@@ -30,7 +30,14 @@ test('passages are numbered and labelled by audience', () => {
 
 test('customer and agent prompts differ', () => {
   assert.match(answerInstructions('customer', [chunk('x')]), /helping passengers/);
-  assert.match(answerInstructions('agent', [chunk('x')]), /Customer-ready wording/);
+  assert.match(answerInstructions('agent', [chunk('x')]), /numbered handling steps/);
+  // The caller's wording is a separate, public-only call (lib/rag/wording.ts).
+  assert.doesNotMatch(answerInstructions('agent', [chunk('x')]), /Customer-ready wording:/);
+});
+
+test('sample staff procedures are labelled as samples', () => {
+  const text = formatPassages([{ ...chunk('Steps.', 'staff'), illustrative: true }]);
+  assert.match(text, /^\[1\] Internal \(sample procedure\): /);
 });
 
 test('customer escalation gives KQ contact details; agent escalation stays internal', () => {

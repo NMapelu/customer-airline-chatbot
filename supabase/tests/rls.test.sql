@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(25);
+select plan(35);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures (inserted as the owner, which bypasses RLS)
@@ -13,6 +13,8 @@ insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'customer-a@example.test'),
   ('22222222-2222-2222-2222-222222222222', 'customer-b@example.test'),
   ('33333333-3333-3333-3333-333333333333', 'agent@example.test');
+-- The agent's account as an admin set it up (Phase 9 checks the account, not only the token).
+update auth.users set raw_app_meta_data = '{"role":"agent"}' where id = '33333333-3333-3333-3333-333333333333';
 
 insert into public.documents (id, slug, title, audience, illustrative, content_hash) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'baggage', 'Baggage policy', 'public', false, 'h1'),
@@ -100,16 +102,76 @@ select is((select count(*)::int from public.documents where audience = 'staff'),
 reset role;
 
 -- ---------------------------------------------------------------------------
--- Call-centre agent with MFA (role set in app_metadata by an admin)
+-- Call-centre agent with MFA (role set in app_metadata by an admin). Phase 9: staff content also
+-- needs an active session (30-minute idle timeout) and an authenticator code under 8 hours old.
 -- ---------------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims',
-  '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated","aal":"aal2","app_metadata":{"role":"agent"}}', true);
+select set_config('request.jwt.claims', json_build_object(
+  'sub', '33333333-3333-3333-3333-333333333333', 'role', 'authenticated', 'aal', 'aal2',
+  'session_id', '44444444-0000-0000-0000-000000000001', 'app_metadata', json_build_object('role', 'agent'),
+  'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint - 60))
+)::text, true);
+select is((select count(*)::int from public.documents where audience = 'staff'), 0,
+  'agent sees no staff documents before the session is recorded');
+select throws_ok('select count(*) from public.agent_sessions', '42501', null, 'agent cannot read the session table');
+select is(public.touch_agent_session(), 'active', 'touching a new agent session records it');
 select is((select count(*)::int from public.documents), 2, 'agent sees public and staff documents');
 select ok((select count(*) from public.match_documents(array_fill(0.1::real, array[1536])::vector, 10)
            where audience = 'staff') > 0, 'agent search includes staff chunks');
 select is((select count(*)::int from public.match_documents(array_fill(0.1::real, array[1536])::vector, 500)), 10,
   'search returns at most 10 chunks');
+reset role;
+
+-- 31 minutes without activity: the session stays expired, even if touched again.
+update public.agent_sessions set last_seen = now() - interval '31 minutes'
+  where session_id = '44444444-0000-0000-0000-000000000001';
+set local role authenticated;
+select is((select count(*)::int from public.documents where audience = 'staff'), 0, 'an idle agent session sees no staff documents');
+select is(public.touch_agent_session(), 'idle', 'an idle agent session cannot be revived');
+reset role;
+update public.agent_sessions set last_seen = now() where session_id = '44444444-0000-0000-0000-000000000001';
+
+-- An authenticator code older than 8 hours.
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object(
+  'sub', '33333333-3333-3333-3333-333333333333', 'role', 'authenticated', 'aal', 'aal2',
+  'session_id', '44444444-0000-0000-0000-000000000001', 'app_metadata', json_build_object('role', 'agent'),
+  'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint - 9 * 3600))
+)::text, true);
+select is((select count(*)::int from public.documents where audience = 'staff'), 0,
+  'an agent whose code is over 8 hours old sees no staff documents');
+reset role;
+
+-- Deactivated (banned) by an admin: the old token, still saying "agent", gets nothing.
+update auth.users set banned_until = now() + interval '100 years' where id = '33333333-3333-3333-3333-333333333333';
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object(
+  'sub', '33333333-3333-3333-3333-333333333333', 'role', 'authenticated', 'aal', 'aal2',
+  'session_id', '44444444-0000-0000-0000-000000000001', 'app_metadata', json_build_object('role', 'agent'),
+  'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint - 60))
+)::text, true);
+select is((select count(*)::int from public.documents where audience = 'staff'), 0,
+  'a deactivated agent with an old token sees no staff documents');
+reset role;
+update auth.users set banned_until = null where id = '33333333-3333-3333-3333-333333333333';
+
+-- A customer token can't record an agent session.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aal":"aal2","session_id":"44444444-0000-0000-0000-000000000002","app_metadata":{}}', true);
+select is(public.touch_agent_session(), 'not_agent', 'a customer cannot record an agent session');
+reset role;
+
+-- Signing out ends staff access for that token straight away.
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object(
+  'sub', '33333333-3333-3333-3333-333333333333', 'role', 'authenticated', 'aal', 'aal2',
+  'session_id', '44444444-0000-0000-0000-000000000001', 'app_metadata', json_build_object('role', 'agent'),
+  'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint - 60))
+)::text, true);
+select is((select count(*)::int from public.documents where audience = 'staff'), 1, 'the agent sees staff documents again');
+select public.end_agent_session();
+select is((select count(*)::int from public.documents where audience = 'staff'), 0, 'after sign-out the token sees no staff documents');
 reset role;
 
 select * from finish();

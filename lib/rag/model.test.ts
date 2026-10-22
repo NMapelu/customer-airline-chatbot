@@ -35,9 +35,24 @@ test('scope check returns the model label', async () => {
   assert.equal(await checkScope(replying('{"result":"off_topic"}'), ask('Who wins the league?')), 'off_topic');
 });
 
-test('scope check fails safe to off topic', async () => {
-  assert.equal(await checkScope(failing(), ask('How many bags?')), 'off_topic');
+test('scope check fails safe: an unclear reply is off topic, a failed call is unavailable', async () => {
   assert.equal(await checkScope(replying('not json'), ask('How many bags?')), 'off_topic');
+  assert.equal(await checkScope(replying('{"result":"maybe"}'), ask('How many bags?')), 'off_topic');
+  assert.equal(await checkScope(failing(), ask('How many bags?')), 'unavailable');
+});
+
+test('agents may ask how to handle a caller; customers get the passenger rules', async () => {
+  let seen = '';
+  const model = new MockLanguageModelV4({
+    doGenerate: async ({ prompt }) => {
+      seen = JSON.stringify(prompt);
+      return { content: [{ type: 'text', text: '{"result":"in_scope"}' }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] };
+    },
+  });
+  await checkScope(model, ask('How do I verify a caller?'), 'agent');
+  assert.match(seen, /call-centre agent/);
+  await checkScope(model, ask('How do I verify a caller?'), 'customer');
+  assert.doesNotMatch(seen, /call-centre agent/);
 });
 
 test("scope check sees the user's own latest words, not a rewrite", async () => {
@@ -87,8 +102,8 @@ test('coverage check returns the model label', async () => {
   assert.equal(await checkCoverage(replying('{"result":"not_covered"}'), 'How do I upgrade with miles?', [passage]), 'not_covered');
 });
 
-test('coverage check fails safe to not covered', async () => {
-  assert.equal(await checkCoverage(failing(), 'Can I get a seat refund?', [passage]), 'not_covered');
+test('coverage check fails safe: an unclear reply is not covered, a failed call is unavailable', async () => {
+  assert.equal(await checkCoverage(failing(), 'Can I get a seat refund?', [passage]), 'unavailable');
   assert.equal(await checkCoverage(replying('not json'), 'Can I get a seat refund?', [passage]), 'not_covered');
 });
 

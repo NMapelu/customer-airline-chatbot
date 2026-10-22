@@ -1,11 +1,13 @@
-// One-time setup for the test user that `npm run eval` signs in as.
+// One-time setup for the test users that `npm run eval` signs in as.
 //
-//   npm run dev-user
+//   npm run dev-user              the customer test user (DEV_USER_* in .dev.vars)
+//   npm run dev-user -- --agent   the agent test user (DEV_AGENT_* in .dev.vars)
 //
-// Reads SUPABASE_URL, SUPABASE_ANON_KEY, DEV_USER_EMAIL and DEV_USER_PASSWORD from .dev.vars,
+// Reads SUPABASE_URL, SUPABASE_ANON_KEY and the user's email and password from .dev.vars,
 // signs in as that user, enrols an authenticator (TOTP) and saves its secret to .dev.vars as
-// DEV_USER_TOTP_SECRET, so the evaluation can sign in at AAL2 like a real user would.
-// It uses the anon key only. Create the user first in the Supabase dashboard (see the README).
+// DEV_USER_TOTP_SECRET (or DEV_AGENT_TOTP_SECRET), so the evaluation can sign in at AAL2 like a
+// real user would. It uses the anon key only. Create the user first (see the README): the customer
+// in the Supabase dashboard, the agent with `npm run invite-agent -- --test-user`.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -21,27 +23,34 @@ function fail(message: string): never {
 
 if (!existsSync(FILE)) fail(`${FILE} not found. Copy .dev.vars.example to .dev.vars first.`);
 process.loadEnvFile(FILE);
+const PREFIX = process.argv.includes('--agent') ? 'DEV_AGENT' : 'DEV_USER';
 const parsed = z
   .object({
     SUPABASE_URL: supabaseUrlSchema,
     SUPABASE_ANON_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
-    DEV_USER_EMAIL: z.email({ error: "must be the test user's email address" }),
-    DEV_USER_PASSWORD: z.string({ error: 'is required' }).min(1, 'is required'),
-    DEV_USER_TOTP_SECRET: z.string().optional(),
+    [`${PREFIX}_EMAIL`]: z.email({ error: "must be the test user's email address" }),
+    [`${PREFIX}_PASSWORD`]: z.string({ error: 'is required' }).min(1, 'is required'),
+    [`${PREFIX}_TOTP_SECRET`]: z.string().optional(),
   })
   .safeParse(process.env);
 if (!parsed.success) {
   fail(`check ${FILE}: ${parsed.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join(', ')}`);
 }
-const env = parsed.data;
+const env = {
+  SUPABASE_URL: parsed.data.SUPABASE_URL as string,
+  SUPABASE_ANON_KEY: parsed.data.SUPABASE_ANON_KEY as string,
+  EMAIL: parsed.data[`${PREFIX}_EMAIL`] as string,
+  PASSWORD: parsed.data[`${PREFIX}_PASSWORD`] as string,
+  TOTP_SECRET: parsed.data[`${PREFIX}_TOTP_SECRET`] as string | undefined,
+};
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
 async function main() {
-  const signIn = await supabase.auth.signInWithPassword({ email: env.DEV_USER_EMAIL, password: env.DEV_USER_PASSWORD });
-  if (signIn.error) fail(`could not sign in as ${env.DEV_USER_EMAIL}: ${signIn.error.message}`);
+  const signIn = await supabase.auth.signInWithPassword({ email: env.EMAIL, password: env.PASSWORD });
+  if (signIn.error) fail(`could not sign in as ${env.EMAIL}: ${signIn.error.message}`);
   const role = signIn.data.user.app_metadata?.role ?? 'customer';
 
   const factors = await supabase.auth.mfa.listFactors();
@@ -50,15 +59,15 @@ async function main() {
 
   if (verified) {
     // Already enrolled: check that the saved secret still works.
-    if (!env.DEV_USER_TOTP_SECRET) {
+    if (!env.TOTP_SECRET) {
       fail(
-        'this user already has an authenticator, but DEV_USER_TOTP_SECRET is not in .dev.vars. ' +
+        `this user already has an authenticator, but ${PREFIX}_TOTP_SECRET is not in .dev.vars. ` +
           'In Supabase, open Authentication → Users → the test user and delete its MFA factor, then run this again.',
       );
     }
-    const check = await supabase.auth.mfa.challengeAndVerify({ factorId: verified.id, code: await totp(env.DEV_USER_TOTP_SECRET) });
-    if (check.error) fail(`the saved DEV_USER_TOTP_SECRET did not work: ${check.error.message}`);
-    console.log(`Test user ready: ${env.DEV_USER_EMAIL} (role: ${role}), MFA verified.`);
+    const check = await supabase.auth.mfa.challengeAndVerify({ factorId: verified.id, code: await totp(env.TOTP_SECRET) });
+    if (check.error) fail(`the saved ${PREFIX}_TOTP_SECRET did not work: ${check.error.message}`);
+    console.log(`Test user ready: ${env.EMAIL} (role: ${role}), MFA verified.`);
     return;
   }
 
@@ -73,9 +82,9 @@ async function main() {
   if (verify.error) fail(`could not verify the authenticator: ${verify.error.message}`);
 
   const text = readFileSync(FILE, 'utf8');
-  appendFileSync(FILE, `${text.endsWith('\n') ? '' : '\n'}DEV_USER_TOTP_SECRET=${secret}\n`);
-  console.log(`Test user ready: ${env.DEV_USER_EMAIL} (role: ${role}), MFA enrolled.`);
-  console.log(`Saved DEV_USER_TOTP_SECRET to ${FILE}. Now run npm run eval.`);
+  appendFileSync(FILE, `${text.endsWith('\n') ? '' : '\n'}${PREFIX}_TOTP_SECRET=${secret}\n`);
+  console.log(`Test user ready: ${env.EMAIL} (role: ${role}), MFA enrolled.`);
+  console.log(`Saved ${PREFIX}_TOTP_SECRET to ${FILE}. Now run npm run eval.`);
 }
 
 main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));

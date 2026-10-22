@@ -3,7 +3,8 @@
 // It checks, through the real API, RLS and MFA: that the test-user sign-in reaches AAL2, that
 // retrieval returns only the audiences a role allows, that an AAL1 session gets nothing, that
 // the escalation contact details come from the Contact Us document, and (Phase 8) that saved
-// conversations are private to their owner.
+// conversations are private to their owner, and (Phase 9) the agent account rules: invitation,
+// idle timeout, customer-ready wording in the history and deactivation.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -17,6 +18,7 @@ import {
   renameConversation,
   saveMessage,
 } from '../../lib/chat/history';
+import { deactivateAgent, inviteAgent } from '../../lib/admin/agents';
 import { getContactDetails } from '../../lib/rag/contact';
 import { retrieve } from '../../lib/rag/retrieve';
 import { devUserClient } from '../../lib/supabase/dev-user';
@@ -94,6 +96,8 @@ before(async () => {
   await load('refund-procedure', 'staff', 'Internal: verify the caller before discussing baggage.', BAGGAGE);
   customer = await mfaUser('customer@example.test');
   agent = await mfaUser('agent@example.test', 'agent');
+  // The app records agent activity on every request; staff content needs it (30-minute idle timeout).
+  assert.equal((await agent.rpc('touch_agent_session')).data, 'active');
 });
 
 after(async () => {
@@ -117,6 +121,10 @@ test('a customer retrieves public chunks only', async () => {
 test('an agent also retrieves staff chunks', async () => {
   const chunks = await retrieve(agent, embeddingOf(BAGGAGE), 'bags', 5);
   assert.ok(chunks.some((c) => c.audience === 'staff'));
+});
+
+test("a customer's touch doesn't open an agent session", async () => {
+  assert.equal((await customer.rpc('touch_agent_session')).data, 'not_agent');
 });
 
 test('a session without MFA retrieves nothing', async () => {
@@ -197,4 +205,93 @@ test('the owner can rename and permanently delete a conversation', async () => {
   assert.equal(await loadConversation(customer, id), null);
   const { count } = await admin.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', id);
   assert.equal(count, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Agent accounts (Phase 9), through lib/admin/agents.ts as the admin scripts use it.
+// ---------------------------------------------------------------------------
+const SITE = 'http://127.0.0.1:3000';
+const tokenFrom = (link: string) => {
+  const url = new globalThis.URL(link);
+  assert.equal(url.origin + url.pathname, `${SITE}/auth/confirm`);
+  return { token_hash: url.searchParams.get('token_hash')!, type: url.searchParams.get('type') as 'invite' | 'magiclink' };
+};
+
+test('an invited agent sets a password and an authenticator, then sees staff content', async () => {
+  const email = `invited-${Date.now()}@example.test`;
+  const invite = await inviteAgent(admin, email, SITE);
+  created.push(invite.userId);
+  assert.equal(invite.kind, 'invited');
+
+  const browser = createClient(URL, ANON, options);
+  const verified = await browser.auth.verifyOtp(tokenFrom(invite.link));
+  assert.equal(verified.error, null);
+  assert.equal(verified.data.user?.app_metadata?.role, 'agent');
+  // The link can only be used once.
+  assert.notEqual((await createClient(URL, ANON, options).auth.verifyOtp(tokenFrom(invite.link))).error, null);
+  // /welcome relies on this: a link sign-in shows up as 'otp'.
+  const aal = await browser.auth.mfa.getAuthenticatorAssuranceLevel();
+  assert.ok(aal.data?.currentAuthenticationMethods.some((m) => typeof m === 'object' && m.method === 'otp'));
+  assert.equal((await browser.auth.updateUser({ password })).error, null);
+
+  // Not finished yet (no authenticator): asking again gives a new link instead of an error.
+  const again = await inviteAgent(admin, email, SITE);
+  assert.equal(again.kind, 'resent');
+
+  const enrol = await browser.auth.mfa.enroll({ factorType: 'totp' });
+  const verify = await browser.auth.mfa.challengeAndVerify({ factorId: enrol.data!.id, code: await totp(enrol.data!.totp.secret) });
+  assert.equal(verify.error, null);
+  assert.equal((await browser.rpc('touch_agent_session')).data, 'active');
+  assert.ok((await retrieve(browser, embeddingOf(BAGGAGE), 'bags', 5)).some((c) => c.audience === 'staff'));
+
+  // Set up now: no more links.
+  await assert.rejects(inviteAgent(admin, email, SITE), /already set up/);
+});
+
+test("a customer's account can't be turned into an agent account", async () => {
+  await assert.rejects(inviteAgent(admin, 'customer@example.test', SITE), /customer account/);
+  await assert.rejects(deactivateAgent(admin, 'customer@example.test'), /not an agent/);
+});
+
+test('after 30 minutes without activity an agent session gets no staff content and stays expired', async () => {
+  const { data } = await agent.auth.getSession();
+  const sessionId = JSON.parse(Buffer.from(data.session!.access_token.split('.')[1], 'base64url').toString()).session_id;
+  const idle = await admin
+    .from('agent_sessions')
+    .update({ last_seen: new Date(Date.now() - 31 * 60_000).toISOString() })
+    .eq('session_id', sessionId)
+    .select('session_id');
+  assert.equal(idle.data?.length, 1);
+  assert.ok((await retrieve(agent, embeddingOf(BAGGAGE), 'bags', 5)).every((c) => c.audience === 'public'));
+  assert.equal((await agent.rpc('touch_agent_session')).data, 'idle');
+  // Restore, for the tests below.
+  await admin.from('agent_sessions').update({ last_seen: new Date().toISOString() }).eq('session_id', sessionId);
+});
+
+test("an agent's customer-ready wording is saved with the answer and shown again", async () => {
+  const id = crypto.randomUUID();
+  await openConversation(agent, id, 'agent', 'Lost bag call');
+  await saveMessage(agent, id, 'user', 'Lost bag call');
+  const staffSource = { ...SOURCE, title: 'Baggage irregularity intake', url: null, audience: 'staff' as const, illustrative: true };
+  await saveMessage(agent, id, 'assistant', '1. Take the report (Internal).', [staffSource, SOURCE], 'We will trace your bag.');
+  await saveMessage(agent, id, 'assistant', '1. Refer to a supervisor (Internal).', [staffSource], null);
+  const loaded = await loadConversation(agent, id);
+  assert.equal(loaded?.audience, 'agent');
+  assert.deepEqual(
+    loaded?.messages.map((m) => m.metadata?.customerWording),
+    [undefined, 'We will trace your bag.', null],
+  );
+  assert.equal(loaded?.messages[1].metadata?.sources?.[0].illustrative, true);
+});
+
+// Last: it deactivates the shared agent.
+test('a deactivated agent is signed out everywhere and their old token gets no staff content', async () => {
+  assert.ok((await retrieve(agent, embeddingOf(BAGGAGE), 'bags', 5)).some((c) => c.audience === 'staff'));
+  await deactivateAgent(admin, 'agent@example.test');
+  const user = await agent.auth.getUser();
+  assert.equal(user.error?.status, 403);
+  // The token still says "agent" until it expires; the database checks the account itself.
+  assert.ok((await retrieve(agent, embeddingOf(BAGGAGE), 'bags', 5)).every((c) => c.audience === 'public'));
+  const signIn = await createClient(URL, ANON, options).auth.signInWithPassword({ email: 'agent@example.test', password });
+  assert.notEqual(signIn.error, null);
 });

@@ -12,3 +12,9 @@ SUPABASE_ANON_KEY=
 # which adds DEV_USER_TOTP_SECRET below. Never set these in Cloudflare.
 DEV_USER_EMAIL=
 DEV_USER_PASSWORD=
+
+# Optional: the agent test user, so `npm run eval` also runs the agent questions.
+# Fill in these two, run `npm run invite-agent -- --test-user` (needs .env.ingest), then
+# `npm run dev-user -- --agent`, which adds DEV_AGENT_TOTP_SECRET below. Never set these in Cloudflare.
+DEV_AGENT_EMAIL=
+DEV_AGENT_PASSWORD=

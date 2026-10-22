@@ -56,8 +56,11 @@ export async function saveMessage(
   role: Turn['role'],
   content: string,
   sources: Source[] = [],
+  customerWording: string | null = null,
 ): Promise<void> {
-  const { error } = await supabase.from('messages').insert({ conversation_id: conversationId, role, content, sources });
+  const { error } = await supabase
+    .from('messages')
+    .insert({ conversation_id: conversationId, role, content, sources, customer_wording: customerWording });
   if (error) throw new Error(`could not save the message: ${error.message}`);
   const touch = await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
   if (touch.error) throw new Error(`could not update the conversation: ${touch.error.message}`);
@@ -79,6 +82,7 @@ const sourceSchema = z.object({
   url: z.string().nullable(),
   retrievedAt: z.string().nullable(),
   audience: z.enum(['public', 'staff']),
+  illustrative: z.boolean().optional(),
 });
 const sourcesSchema = z.array(sourceSchema).catch([]);
 
@@ -86,23 +90,29 @@ const sourcesSchema = z.array(sourceSchema).catch([]);
 export async function loadConversation(
   supabase: SupabaseClient,
   id: string,
-): Promise<{ title: string; messages: ChatMessage[] } | null> {
-  const { data: conversation, error } = await supabase.from('conversations').select('title').eq('id', id).maybeSingle();
+): Promise<{ title: string; audience: Role; messages: ChatMessage[] } | null> {
+  const { data: conversation, error } = await supabase.from('conversations').select('title, audience').eq('id', id).maybeSingle();
   if (error) throw new Error(`could not read the conversation: ${error.message}`);
   if (!conversation) return null;
   const { data: rows, error: rowsError } = await supabase
     .from('messages')
-    .select('id, role, content, sources')
+    .select('id, role, content, sources, customer_wording')
     .eq('conversation_id', id)
     .order('created_at', { ascending: true });
   if (rowsError) throw new Error(`could not read the messages: ${rowsError.message}`);
-  const messages: ChatMessage[] = (rows ?? []).map((m) => ({
-    id: m.id,
-    role: m.role,
-    parts: [{ type: 'text', text: m.content }],
-    metadata: m.role === 'assistant' ? { sources: sourcesSchema.parse(m.sources) } : undefined,
-  }));
-  return { title: conversation.title, messages };
+  const audience: Role = conversation.audience === 'agent' ? 'agent' : 'customer';
+  const messages: ChatMessage[] = (rows ?? []).map((m) => {
+    const sources = sourcesSchema.parse(m.sources);
+    // An agent's answer shows its wording panel again, even when there was none to give.
+    const wording = audience === 'agent' && sources.length > 0 ? { customerWording: (m.customer_wording as string | null) ?? null } : {};
+    return {
+      id: m.id,
+      role: m.role,
+      parts: [{ type: 'text', text: m.content }],
+      metadata: m.role === 'assistant' ? { sources, ...wording } : undefined,
+    };
+  });
+  return { title: conversation.title, audience, messages };
 }
 
 export async function renameConversation(supabase: SupabaseClient, id: string, title: string): Promise<boolean> {

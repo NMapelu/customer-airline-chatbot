@@ -14,6 +14,7 @@ export async function proxy(request: NextRequest) {
   const headers: Record<string, string> = {};
 
   let status;
+  let agentTimedOut = false;
   try {
     const env = getServerEnv();
     const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
@@ -28,7 +29,7 @@ export async function proxy(request: NextRequest) {
         },
       },
     });
-    status = (await getAuthState(supabase)).status;
+    ({ status, agentTimedOut = false } = await getAuthState(supabase));
   } catch (error) {
     console.error('proxy session check failed', error);
     status = 'error' as const;
@@ -39,7 +40,8 @@ export async function proxy(request: NextRequest) {
   if (access.action === 'allow') {
     result = response;
   } else if (access.action === 'redirect') {
-    result = NextResponse.redirect(new URL(access.to, request.url), 303);
+    const to = agentTimedOut && access.to === '/login' ? '/login?notice=agent-timeout' : access.to;
+    result = NextResponse.redirect(new URL(to, request.url), 303);
   } else {
     const message =
       access.status === 401 ? 'Please sign in to use the chat.' : 'The service is not available right now. Please try again shortly.';
