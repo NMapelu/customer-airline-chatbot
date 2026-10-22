@@ -43,6 +43,7 @@ function isPastDate(value) {
 
 function checkDocument(folder, file) {
   const problems = [];
+  // nosemgrep -- linear pattern, run on repo file names only.
   if (!SLUG.test(file)) problems.push('file name must be lowercase-with-hyphens.md');
 
   const parsed = parseFrontMatter(readFileSync(join('docs', folder, file), 'utf8'));
@@ -61,6 +62,7 @@ function checkDocument(folder, file) {
   }
 
   if (folder === 'public') {
+    // nosemgrep -- linear pattern, run on the repo's own front matter only.
     if (data.source_url && !KQ_URL.test(data.source_url)) {
       problems.push('source_url must be an https://…kenya-airways.com/ address');
     }

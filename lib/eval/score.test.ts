@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { histogram, sweepThreshold, verdict, type EvalQuestion, type EvalResult } from './score';
+import { histogram, missedTargets, sweepThreshold, verdict, type EvalQuestion, type EvalResult } from './score';
 
 const q = (over: Partial<EvalQuestion>): EvalQuestion => ({
   id: 'x',
@@ -75,4 +75,21 @@ test('the histogram counts values per bucket', () => {
     { from: 0, count: 2 },
     { from: 0.5, count: 2 },
   ]);
+});
+
+test('the CI gate reports missed targets, ungrounded answers, errors and categories not run', () => {
+  const questions = [q({ id: 'a' }), q({ id: 'b' }), q({ id: 'c', category: 'off_topic', expect: 'refusal' }), q({ id: 'd', category: 'agent', audience: 'agent' })];
+  assert.deepEqual(
+    missedTargets(questions, [r({ id: 'a' }), r({ id: 'b' }), r({ id: 'c', category: 'off_topic', kind: 'refusal' }), r({ id: 'd', category: 'agent', kind: 'answer', sourceSlugs: ['refund-request-processing'] })]),
+    [],
+  );
+  assert.deepEqual(
+    missedTargets(questions, [
+      r({ id: 'a', grounded: false }),
+      r({ id: 'b', kind: 'error', note: 'x' }),
+      r({ id: 'c', category: 'off_topic', kind: 'answer' }),
+      r({ id: 'd', category: 'agent', kind: 'skipped' }),
+    ]),
+    ['answerable 0% (target 90%)', 'off_topic 0% (target 100%)', 'agent not run', '1 ungrounded answers', '1 errors'],
+  );
 });

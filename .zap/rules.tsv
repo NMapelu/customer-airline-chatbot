@@ -1,0 +1,2 @@
+# ZAP alerts reviewed and accepted (overview §15.4). One per line, tab separated:
+# <plugin id>	IGNORE	(<alert name>: <reason>)

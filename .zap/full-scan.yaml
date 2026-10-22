@@ -1,0 +1,54 @@
+# ZAP full (active, authenticated) scan of the staging site, run by release.yml through the ZAP
+# Automation Framework. It signs every request in as the customer test user (SESSION_COOKIE).
+# Paths that call OpenAI or change the account are left out: attacking them would spend credit and
+# could lock or delete the test account. Access to those is covered by tests/deployed instead.
+env:
+  contexts:
+    - name: staging
+      urls:
+        - ${BASE_URL}
+      includePaths:
+        - ${BASE_URL}.*
+      excludePaths:
+        - .*/api/chat.*
+        - .*/api/checklist.*
+        - .*/settings.*
+        - .*/auth/.*
+        - .*/mfa/.*
+  parameters:
+    failOnError: true
+    progressToStdout: true
+jobs:
+  - type: replacer
+    parameters:
+      deleteAllRules: true
+    rules:
+      - description: Test user session
+        matchType: req_header
+        matchString: Cookie
+        matchRegex: false
+        replacementString: ${SESSION_COOKIE}
+  - type: spider
+    parameters:
+      context: staging
+      maxDuration: 5
+      # Forms are server actions (sign out, rename, delete); submitting them would end the session.
+      processForm: false
+      postForm: false
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+  - type: activeScan
+    parameters:
+      context: staging
+      maxScanDurationInMins: 20
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: zap-report
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk
+      reportFile: zap-report

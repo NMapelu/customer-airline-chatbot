@@ -1,0 +1,6 @@
+# Gitleaks findings checked and accepted (overview §15.4). Each is test data, not a secret.
+# A sample password in the sign-up form test.
+447959abbeb825cc3fe9e96f86166bb066beb92e:lib/auth/schemas.test.ts:generic-api-key:16
+5de8e5c5cae1f0d0473823dca6c75aa300b9ce4f:lib/auth/schemas.test.ts:generic-api-key:16
+# The published RFC 6238 test-vector secret ("12345678901234567890" in base32).
+2e4e18c5e95b6054dc368e6d9913b4fafc05203a:lib/totp.test.ts:generic-api-key:6

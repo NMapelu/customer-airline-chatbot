@@ -21,6 +21,31 @@
 		{ "name": "CHAT_IP_LIMITER", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } },
 		{ "name": "AUTH_IP_LIMITER", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } },
 		{ "name": "AUTH_ACCOUNT_LIMITER", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
-	]
+	],
 	// Secrets (OPENAI_API_KEY, ...) are set with `npx wrangler secret put <NAME>`, never here.
+
+	// Pipeline Workers (overview §15.3), deployed only by GitHub Actions, which also sets their
+	// secrets from the matching GitHub environment. "preview" serves the latest pull request for the
+	// dynamic scans; "staging" serves main before it is promoted to production. Rate-limit bindings
+	// aren't inherited, so each environment lists its own, with separate counters.
+	"env": {
+		"preview": {
+			"name": "kq-policy-assistant-preview",
+			"ratelimits": [
+				{ "name": "CHAT_USER_LIMITER", "namespace_id": "2001", "simple": { "limit": 20, "period": 60 } },
+				{ "name": "CHAT_IP_LIMITER", "namespace_id": "2002", "simple": { "limit": 60, "period": 60 } },
+				{ "name": "AUTH_IP_LIMITER", "namespace_id": "2003", "simple": { "limit": 30, "period": 60 } },
+				{ "name": "AUTH_ACCOUNT_LIMITER", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } }
+			]
+		},
+		"staging": {
+			"name": "kq-policy-assistant-staging",
+			"ratelimits": [
+				{ "name": "CHAT_USER_LIMITER", "namespace_id": "3001", "simple": { "limit": 20, "period": 60 } },
+				{ "name": "CHAT_IP_LIMITER", "namespace_id": "3002", "simple": { "limit": 60, "period": 60 } },
+				{ "name": "AUTH_IP_LIMITER", "namespace_id": "3003", "simple": { "limit": 30, "period": 60 } },
+				{ "name": "AUTH_ACCOUNT_LIMITER", "namespace_id": "3004", "simple": { "limit": 5, "period": 60 } }
+			]
+		}
+	}
 }

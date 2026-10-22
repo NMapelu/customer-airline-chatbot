@@ -60,6 +60,8 @@ npx wrangler secret put SUPABASE_ANON_KEY   # the anon / publishable key, never 
 | `npm run eval` | Run the evaluation set and write `eval/report.md` (see below) |
 | `npm test` | Run the unit tests (Node's built-in test runner) |
 | `npm run test:integration` | Run the integration tests against a local Supabase stack (CI runs them) |
+| `npm run test:deployed` | Access-control tests against a deployed site (`BASE_URL` and the `TEST_*` accounts; the pipeline runs them) |
+| `npm run eval -- --ci` | The evaluation as CI runs it: fails below the §14 targets |
 
 ## Database
 
@@ -188,6 +190,10 @@ Security principles, the threat model and scan results live in [`docs/security/`
 - **Display:** light or dark mode (follows the device by default) and text size, in Settings.
 - **Pre-travel checklist** (`/checklist`, passengers): one message about the trip, one checklist with sources; topics the knowledge base doesn't cover are listed with the contact details. *Save as PDF* prints the checklist and its sources only.
 - **Insights** (`/admin`, administrators): question volume, answer, escalation and refusal rates, most-cited documents, knowledge gaps and recent thumbs-down answers. No emails or ids; detail only for the last 30 days; each visit is audit-logged. Give the role with `npm run set-admin -- <email>`, then sign in again.
+
+### CI/CD and scanning (Phase 12)
+
+Every pull request runs CI (lint, types, unit, database and integration tests, build, bundle secret scan), the security scans (Gitleaks, Semgrep, npm audit, OSV-Scanner, dependency review, Trivy, actionlint, zizmor, SBOM) and, on the preview Worker, ZAP, the access-control tests and the LLM red team (`redteam/`). Pull requests that change the documents or the answer code also run the evaluation. Merging to `main` deploys through staging to production. Details, accepted findings and how to read a failure: [`docs/security/pipeline.md`](docs/security/pipeline.md).
 
 ## Authorship
 

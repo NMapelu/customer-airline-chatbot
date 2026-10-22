@@ -1,0 +1,7 @@
+# Vulnerabilities checked and accepted (overview §15.4: "formally accepted with a written reason").
+# Each entry expires, so it is looked at again.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-31
+reason = "braces (stack exhaustion on deeply nested patterns). Only used by ESLint at development time, on the repository's own file patterns; never shipped or run on user input. No fixed version exists yet."
