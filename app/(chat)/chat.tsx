@@ -123,7 +123,7 @@ function CustomerWording({ text }: { text: string | null }) {
     <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-black">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold">Customer-ready wording (public policy only)</p>
-        <CopyButton text={text} className="rounded border border-green-400 bg-white px-2 py-0.5 text-xs" />
+        <CopyButton text={text} className="rounded border border-green-400 bg-surface px-2 py-0.5 text-xs" />
       </div>
       <p className="mt-1">{text}</p>
     </div>
@@ -136,7 +136,7 @@ function EscalationSummary({ text }: { text: string }) {
     <div className="mt-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-black">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold">Your question, ready to send to Kenya Airways</p>
-        <CopyButton text={text} className="rounded border border-blue-400 bg-white px-2 py-0.5 text-xs" />
+        <CopyButton text={text} className="rounded border border-blue-400 bg-surface px-2 py-0.5 text-xs" />
       </div>
       <p className="mt-1">{text}</p>
     </div>
@@ -193,7 +193,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                   type="button"
                   disabled={busy}
                   onClick={() => sendMessage({ text: q.question })}
-                  className="rounded-full border border-gray-300 bg-white px-3 py-1 text-black hover:bg-gray-100"
+                  className="rounded-full border border-gray-300 bg-surface px-3 py-1 text-black hover:bg-gray-100"
                 >
                   {q.label}
                 </button>
@@ -241,7 +241,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                       key={q}
                       type="button"
                       onClick={() => sendMessage({ text: q })}
-                      className="rounded-full border border-blue-300 bg-white px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
+                      className="rounded-full border border-blue-300 bg-surface px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
                     >
                       {q}
                     </button>
@@ -264,7 +264,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           sendMessage({ text: input });
           setInput('');
         }}
-        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-white p-2 shadow-xl"
+        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-surface p-2 shadow-xl"
       >
         <input
           className="w-full p-2 text-black"

@@ -14,7 +14,7 @@ async function copy(text: string, done: (ok: boolean) => void) {
   }
 }
 
-const button = 'rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
+const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
 
 // Copy an answer, and for passengers, share it as a read-only link that expires in 30 days.
 export function AnswerActions({ text, sources, messageId, canShare }: { text: string; sources: Source[]; messageId?: string; canShare: boolean }) {
@@ -57,7 +57,7 @@ export function AnswerActions({ text, sources, messageId, canShare }: { text: st
         )}
       </div>
       {link && !revoked && (
-        <div className="mt-2 rounded border border-gray-300 bg-white p-2 text-black">
+        <div className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
           <p>Anyone with this link can read this question and answer for 30 days. It doesn&apos;t show who you are.</p>
           <input readOnly value={link.url} aria-label="Share link" className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5" />
           <div className="mt-1 flex gap-2">
