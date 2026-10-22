@@ -28,6 +28,11 @@ export default async function ChatLayout({ children }: LayoutProps<'/'>) {
         <Link href="/settings" className="text-blue-700 underline">
           Settings
         </Link>
+        {user.app_metadata?.role === 'admin' && (
+          <Link href="/admin" className="ml-3 text-blue-700 underline">
+            Insights
+          </Link>
+        )}
       </div>
     </nav>
   );
