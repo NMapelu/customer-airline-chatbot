@@ -32,8 +32,21 @@ export async function createClient(): Promise<SupabaseClient> {
 // everyone else; this repeats the check on the server so a page never relies on proxy.ts alone.
 export async function requireAal2(): Promise<{ supabase: SupabaseClient; user: User; role: Role }> {
   const supabase = await createClient();
-  const { status, user, role } = await getAuthState(supabase);
+  const { status, user, role, agentTimedOut } = await getAuthState(supabase);
   if (status === 'error') throw new Error('the session could not be checked');
+  if (agentTimedOut) redirect('/login?notice=agent-timeout');
   if (status !== 'aal2' || !user) redirect(HOME[status]);
   return { supabase, user, role };
+}
+
+// True when this session was signed in by a one-time link (an agent's setup link from
+// `npm run invite-agent`) within the last hour and has no authenticator yet. Only then may the
+// password be set without the old one (app/(auth)/welcome).
+export async function cameFromSetupLink(supabase: SupabaseClient): Promise<boolean> {
+  const { status } = await getAuthState(supabase);
+  if (status !== 'needs_enrol') return false;
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || !data) return false;
+  const hourAgo = Date.now() / 1000 - 3600;
+  return data.currentAuthenticationMethods.some((m) => typeof m === 'object' && m.method === 'otp' && m.timestamp > hourAgo);
 }

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { loadConversation } from '@/lib/chat/history';
-import { createClient } from '@/lib/supabase/server';
+import { requireAal2 } from '@/lib/supabase/server';
 import { Chat } from '../../chat';
 
 // One conversation (US-11). An id with no saved conversation yet is a new, empty chat. Another
@@ -9,7 +9,7 @@ import { Chat } from '../../chat';
 export default async function ConversationPage({ params }: PageProps<'/c/[id]'>) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const supabase = await createClient();
+  const { supabase, role } = await requireAal2();
   const conversation = await loadConversation(supabase, id);
-  return <Chat key={id} id={id} initialMessages={conversation?.messages ?? []} />;
+  return <Chat key={id} id={id} role={role} initialMessages={conversation?.messages ?? []} />;
 }

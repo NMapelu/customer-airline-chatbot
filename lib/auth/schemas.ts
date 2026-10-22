@@ -21,6 +21,11 @@ export const signUpSchema = z
   .object({ email: emailSchema, password: passwordSchema, confirm: z.string() })
   .refine((v) => v.password === v.confirm, { path: ['confirm'] });
 
+// An invited agent choosing their password (US-32).
+export const newPasswordSchema = z
+  .object({ password: passwordSchema, confirm: z.string() })
+  .refine((v) => v.password === v.confirm, { path: ['confirm'] });
+
 export const signInSchema = z.object({ email: emailSchema, password: z.string().min(1).max(200) });
 
 // A 6-digit authenticator code. Spaces are allowed, because apps often show "123 456".
