@@ -36,16 +36,9 @@ on:
 permissions:
   contents: read
 
+# Secrets are given only to the steps that sign in.
 env:
   BASE_URL: ${{ inputs.base-url }}
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-  TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
-  TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
-  TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
-  TEST_AGENT_EMAIL: ${{ secrets.TEST_AGENT_EMAIL }}
-  TEST_AGENT_PASSWORD: ${{ secrets.TEST_AGENT_PASSWORD }}
-  TEST_AGENT_TOTP_SECRET: ${{ secrets.TEST_AGENT_TOTP_SECRET }}
 
 jobs:
   access-control:
@@ -61,7 +54,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:deployed
+      - name: Run the access tests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
+          TEST_AGENT_EMAIL: ${{ secrets.TEST_AGENT_EMAIL }}
+          TEST_AGENT_PASSWORD: ${{ secrets.TEST_AGENT_PASSWORD }}
+          TEST_AGENT_TOTP_SECRET: ${{ secrets.TEST_AGENT_TOTP_SECRET }}
+        run: npm run test:deployed
 
   zap:
     name: ZAP ${{ inputs.zap }} scan
@@ -78,6 +81,12 @@ jobs:
       - run: npm ci
       - name: Sign the test customer in
         if: inputs.zap == 'full'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
         run: npx tsx tests/deployed/session-cookie.ts
       - name: Scan
         env:
@@ -119,6 +128,12 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Sign the test customer in
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TEST_CUSTOMER_EMAIL: ${{ secrets.TEST_CUSTOMER_EMAIL }}
+          TEST_CUSTOMER_PASSWORD: ${{ secrets.TEST_CUSTOMER_PASSWORD }}
+          TEST_CUSTOMER_TOTP_SECRET: ${{ secrets.TEST_CUSTOMER_TOTP_SECRET }}
         run: npx tsx tests/deployed/session-cookie.ts
       - name: Run the attacks
         working-directory: redteam
