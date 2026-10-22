@@ -2,13 +2,12 @@
 
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { safeAnswerHref } from '@/lib/chat/links';
 
 // Answers formatted for skimming (overview §7.8, US-24): bold, lists and small tables from the
 // model's Markdown. Raw HTML in an answer is dropped, never rendered (T3), only the elements
-// below are allowed, and only https links are kept, opening in a new tab.
+// below are allowed, and only https links to kenya-airways.com are kept, opening in a new tab.
 const ALLOWED = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'br', 'code', 'del'];
-
-const safeHref = (url: string) => (url.startsWith('https://') ? url : '');
 
 const components: Components = {
   p: ({ children }) => <p className="my-1">{children}</p>,
@@ -33,7 +32,7 @@ const components: Components = {
 
 export function AnswerText({ text }: { text: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} allowedElements={ALLOWED} unwrapDisallowed skipHtml urlTransform={safeHref} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} allowedElements={ALLOWED} unwrapDisallowed skipHtml urlTransform={safeAnswerHref} components={components}>
       {text}
     </ReactMarkdown>
   );
