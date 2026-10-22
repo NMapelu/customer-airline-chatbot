@@ -1,6 +1,7 @@
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 import type { NextRequest } from 'next/server';
+import { audit } from '@/lib/security/audit';
 import { createClient } from '@/lib/supabase/server';
 
 // Two kinds of link land here, and the destinations are fixed, so this can't be used as an open redirect.
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (error) redirect('/login?notice=invite-failed');
+    await audit(supabase, 'email_confirmed', request.headers, `agent ${type} link`);
     redirect('/welcome');
   }
 
@@ -31,5 +33,6 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) redirect('/login?notice=confirmed');
+  await audit(supabase, 'email_confirmed', request.headers);
   redirect('/mfa/enroll');
 }

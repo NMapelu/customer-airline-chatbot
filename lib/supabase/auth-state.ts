@@ -1,6 +1,7 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { agentNeedsCode, type AuthStatus } from '../auth/access';
 import type { Role } from '../rag/types';
+import { audit } from '../security/audit';
 
 // Shared by proxy.ts and the server code in ./server.ts. No Next.js request APIs here, so proxy.ts can use it.
 
@@ -52,6 +53,7 @@ export async function getAuthState(supabase: SupabaseClient): Promise<AuthState>
     }
     if (activity !== 'active') {
       // 'idle', or a token from before the account became an agent: sign in again.
+      if (activity === 'idle') await audit(supabase, 'agent_timed_out', null);
       await supabase.auth.signOut({ scope: 'local' });
       return { ...none('signed_out'), agentTimedOut: activity === 'idle' };
     }
