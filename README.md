@@ -170,6 +170,15 @@ Work is tracked on the GitHub project board. There is one milestone per build ph
 
 Security principles, the threat model and scan results live in [`docs/security/`](docs/security/). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
+### Hardening and privacy (Phase 10)
+
+- **Headers:** `next.config.ts` sets HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and COOP on every route. `proxy.ts` adds a Content-Security-Policy with a fresh nonce per request, so every page is rendered per request. After deploying, check the site at [securityheaders.com](https://securityheaders.com).
+- **Rate limits** (`wrangler.jsonc`, `lib/security/rate-limit.ts`): 20 chat messages a minute per user and 60 per IP address; 30 sign-in, sign-up and code attempts a minute per IP address and 5 per account. The bindings deploy with the Worker. If a limiter is missing or fails, the request is refused.
+- **Audit log** (`public.audit_log`): security events only, never message text, passwords or codes, with a shortened IP address. Nobody can read it through the API; read it in the Supabase dashboard (Table Editor → `audit_log`) or with SQL.
+- **Retention:** a daily `pg_cron` job (`purge-expired-data`, 03:17 UTC) deletes conversations 12 months after their last activity and audit entries after 12 months.
+- **Account deletion:** Settings → *Delete my account*, with a code from the authenticator app. Agent accounts are removed by the administrator instead.
+- **Privacy notice:** `/privacy`, public. Sign-up needs consent to it; the notice version and time are saved in the account's `user_metadata.privacy_consent`. Change `PRIVACY_VERSION` in `lib/legal.ts` when the notice changes.
+
 ## Authorship
 
 The project is owned and directed by Neema Mapelu. Parts of the code are written with the AI assistant Claude, and those commits are marked `Co-Authored-By: Claude`. Every change is reviewed and merged by the owner.

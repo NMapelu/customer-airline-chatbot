@@ -12,9 +12,10 @@ test('passwords need 12 characters, both cases and a digit', () => {
   assert.ok(!passwordSchema.safeParse(`Aa1${'é'.repeat(35)}`).success, 'over 72 bytes');
 });
 
-test('sign-up needs the two passwords to match', () => {
-  const base = { email: 'someone@example.com', password: 'Strong-pass-123' };
+test('sign-up needs the two passwords to match and consent to the privacy notice', () => {
+  const base = { email: 'someone@example.com', password: 'Strong-pass-123', consent: true };
   assert.ok(signUpSchema.safeParse({ ...base, confirm: 'Strong-pass-123' }).success);
+  assert.ok(!signUpSchema.safeParse({ ...base, confirm: 'Strong-pass-123', consent: false }).success, 'no consent');
   assert.ok(!signUpSchema.safeParse({ ...base, confirm: 'Strong-pass-124' }).success);
   assert.ok(!signUpSchema.safeParse({ ...base, email: 'not-an-email', confirm: 'Strong-pass-123' }).success);
 });

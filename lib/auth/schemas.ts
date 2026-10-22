@@ -1,10 +1,10 @@
 import { z } from 'zod';
+import { PASSWORD_MIN } from './password-rule';
 
 // Form rules, checked on the server before anything reaches Supabase Auth. The password rule
 // matches the Supabase setting (12 characters, lower and upper case letters and digits), so a
 // password the form accepts is never rejected later. Supabase enforces it too.
-export const PASSWORD_MIN = 12;
-export const PASSWORD_RULE = `at least ${PASSWORD_MIN} characters, with upper and lower case letters and a digit`;
+export { PASSWORD_MIN, PASSWORD_RULE } from './password-rule';
 
 export const emailSchema = z.email().max(254);
 
@@ -18,7 +18,7 @@ export const passwordSchema = z
   .regex(/\d/);
 
 export const signUpSchema = z
-  .object({ email: emailSchema, password: passwordSchema, confirm: z.string() })
+  .object({ email: emailSchema, password: passwordSchema, confirm: z.string(), consent: z.literal(true) })
   .refine((v) => v.password === v.confirm, { path: ['confirm'] });
 
 // An invited agent choosing their password (US-32).
