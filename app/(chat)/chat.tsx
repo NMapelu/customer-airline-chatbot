@@ -8,6 +8,7 @@ import { DefaultChatTransport } from 'ai';
 import { DISCLAIMER } from '@/lib/legal';
 import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
+import { AnswerText } from './answer-text';
 
 // The server answers errors with {"error": "..."}; show that text, or a generic message.
 function errorText(error: Error): string {
@@ -19,6 +20,8 @@ function errorText(error: Error): string {
   }
   return 'Sorry, something went wrong. Please try again.';
 }
+
+const answerText = (m: ChatMessage) => m.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
 
 const checkedOn = (date: string) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -179,12 +182,16 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
         {messages.map((m) => (
           <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`rounded-lg px-4 py-2 max-w-[80%] whitespace-pre-wrap ${
-                m.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-black'
+              className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                m.role === 'user' ? 'whitespace-pre-wrap bg-blue-500 text-white' : 'bg-gray-200 text-black'
               }`}
             >
-              {/* Plain text only: answers are never rendered as HTML (threat model T3). */}
-              {m.parts.map((part, i) => (part.type === 'text' ? <span key={i}>{part.text}</span> : null))}
+              {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
+              {m.role === 'user' ? (
+                m.parts.map((part, i) => (part.type === 'text' ? <span key={i}>{part.text}</span> : null))
+              ) : (
+                <AnswerText text={answerText(m)} />
+              )}
               {m.metadata?.piiMasked && (
                 <p className="mt-2 text-xs text-amber-800">
                   We hid what looked like personal details in your message before processing it.
