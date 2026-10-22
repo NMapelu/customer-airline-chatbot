@@ -14,7 +14,7 @@ async function copy(text: string, done: (ok: boolean) => void) {
   }
 }
 
-const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
+const button = 'btn btn-outline btn-sm';
 
 // Copy an answer, and for passengers, share it as a read-only link that expires in 30 days.
 export function AnswerActions({ text, sources, messageId, canShare }: { text: string; sources: Source[]; messageId?: string; canShare: boolean }) {
@@ -45,7 +45,7 @@ export function AnswerActions({ text, sources, messageId, canShare }: { text: st
   }
 
   return (
-    <div className="mt-2 text-xs">
+    <div className="mt-3 text-xs">
       <div className="flex flex-wrap gap-2">
         <button type="button" className={button} onClick={() => copy(answerWithSources(text, sources), setCopied)}>
           {copied ? 'Copied' : 'Copy answer'}
@@ -57,22 +57,22 @@ export function AnswerActions({ text, sources, messageId, canShare }: { text: st
         )}
       </div>
       {link && !revoked && (
-        <div className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
+        <div className="mt-2 rounded-lg border border-ok bg-ok-soft p-3 text-foreground">
           <p>Anyone with this link can read this question and answer for 30 days. It doesn&apos;t show who you are.</p>
-          <input readOnly value={link.url} aria-label="Share link" className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5" />
-          <div className="mt-1 flex gap-2">
-            <button type="button" className={button} onClick={() => copy(link.url, setLinkCopied)}>
+          <input readOnly value={link.url} aria-label="Share link" className="input mt-2 py-1 text-xs" />
+          <div className="mt-2 flex gap-2">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => copy(link.url, setLinkCopied)}>
               {linkCopied ? 'Copied' : 'Copy link'}
             </button>
-            <button type="button" className={button} disabled={pending} onClick={revoke}>
+            <button type="button" className="btn btn-danger btn-sm" disabled={pending} onClick={revoke}>
               Stop sharing
             </button>
           </div>
         </div>
       )}
-      {revoked && <p className="mt-1 text-gray-600">The link no longer works.</p>}
+      {revoked && <p className="mt-1 text-muted">The link no longer works.</p>}
       {error && (
-        <p role="alert" className="mt-1 text-red-800">
+        <p role="alert" className="mt-1 text-brand">
           {error}
         </p>
       )}
