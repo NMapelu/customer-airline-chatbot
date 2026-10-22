@@ -42,6 +42,8 @@ export type ChatMetadata = {
   // Passenger answers only (US-25): 2–3 questions the knowledge base can answer, shown as buttons.
   // Shown under the latest answer only, so they aren't saved.
   followUps?: string[];
+  // Passenger escalations only (overview §7.11): their question, ready to copy. Not saved.
+  escalationSummary?: string;
   // True when personal details were hidden before the message reached OpenAI (R7).
   piiMasked?: boolean;
 };

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { answerInstructions, escalationText, formatPassages } from './prompts';
+import { answerInstructions, escalationSummary, escalationText, formatPassages } from './prompts';
 import type { RetrievedChunk } from './types';
 
 const chunk = (content: string, audience: 'public' | 'staff' = 'public'): RetrievedChunk => ({
@@ -45,4 +45,12 @@ test('customer escalation gives KQ contact details; agent escalation stays inter
   assert.match(escalationText('customer', contact), /\+254 20 000 0000, https:\/\/www\.kenya-airways\.com\/en-us\/contact\//);
   assert.match(escalationText('customer', { ...contact, phone: null }), /customer service: https:/);
   assert.doesNotMatch(escalationText('agent', contact), /\+254/);
+});
+
+test('the escalation summary restates the question only', () => {
+  assert.equal(
+    escalationSummary('  Can I carry an e-bike battery\n in checked baggage? '),
+    "I'd like to know the following about my Kenya Airways travel: Can I carry an e-bike battery in checked baggage?",
+  );
+  assert.equal(escalationSummary('   '), '');
 });
