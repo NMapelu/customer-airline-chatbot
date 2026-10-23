@@ -1,23 +1,19 @@
 import type { ComponentProps, ReactNode } from 'react';
 
-// Small shared pieces for the auth forms, so every form looks and reads the same.
+// Small shared pieces for the auth and settings forms, so every form looks and reads the same.
 
 export function Field({ label, ...input }: { label: string } & ComponentProps<'input'>) {
   return (
     <label className="block text-sm">
       <span className="font-medium">{label}</span>
-      <input className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5" {...input} />
+      <input className="input mt-1.5" {...input} />
     </label>
   );
 }
 
 export function Submit({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-    >
+    <button type="submit" disabled={pending} className="btn btn-primary w-full">
       {pending ? 'Please wait…' : children}
     </button>
   );
@@ -26,8 +22,18 @@ export function Submit({ pending, children }: { pending: boolean; children: Reac
 export function FormError({ message }: { message?: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded bg-red-100 px-3 py-2 text-sm text-red-800">
+    <p role="alert" className="notice notice-error">
       {message}
     </p>
+  );
+}
+
+// The heading and short explanation at the top of each auth card.
+export function FormTitle({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+      {children && <p className="text-sm text-muted">{children}</p>}
+    </div>
   );
 }
