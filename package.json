@@ -50,7 +50,7 @@
     "turndown-plugin-gfm": "1.0.2",
     "typescript": "^5",
     "unpdf": "1.8.1",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.156.0"
   },
   "engines": {
     "node": ">=22"
