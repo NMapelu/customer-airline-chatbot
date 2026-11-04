@@ -54,3 +54,6 @@ docs/public/*
 
 # Full evaluation answers (can quote KQ text)
 eval/results.jsonl
+
+# Claude Code configuration
+.claude/

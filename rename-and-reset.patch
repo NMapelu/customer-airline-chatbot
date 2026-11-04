@@ -1,0 +1,892 @@
+diff --git a/README.md b/README.md
+index 3f138ca..f20b182 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# KQ Policy Assistant
++# KQ Chatbot
+ 
+ > **Disclaimer:** this is an independent academic project. It is not an official Kenya Airways service and is not affiliated with or endorsed by Kenya Airways.
+ 
+@@ -125,6 +125,7 @@ Everyone signs up with an email and password, confirms the email, and must set u
+ - Pages, Server Actions and `/api/chat` check AAL2 again on the server, and every RLS policy requires it too.
+ - Session cookies are HTTP-only, SameSite=Lax and Secure (except under `npm run dev`). The browser never talks to Supabase directly; all auth calls go through Server Actions.
+ - MFA can't be turned off. In **Settings**, users can replace their authenticator after entering a code from the current one.
++- **Forgotten password:** *Forgot your password?* on the sign-in page emails a reset link. The link only works in the same browser, and the user must also enter their authenticator code before choosing a new password, so the email alone can't take over an account. Saving the new password signs out every other device.
+ - **Lost authenticator (manual recovery):** after checking the person's identity, the project owner deletes their authenticator in the Supabase dashboard (**Authentication → Users → the user → Multi-factor authentication**). At their next sign-in they set up a new one.
+ 
+ Conversations are saved and listed in the sidebar, newest first. Users can open, rename and delete them; deleting is permanent. Questions are saved with personal details masked.
+diff --git a/app/(auth)/actions.ts b/app/(auth)/actions.ts
+index 511e1b9..6199207 100644
+--- a/app/(auth)/actions.ts
++++ b/app/(auth)/actions.ts
+@@ -4,14 +4,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
+ import { headers } from 'next/headers';
+ import { redirect } from 'next/navigation';
+ import { newTotpFactor, type EnrolStart } from '@/lib/auth/mfa';
+-import { codeSchema, factorIdSchema, newPasswordSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
++import { codeSchema, emailSchema, factorIdSchema, newPasswordSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
+ import { HOME } from '@/lib/auth/access';
+ import { PRIVACY_VERSION } from '@/lib/legal';
+ import { TOO_MANY, tooManyAttempts } from '@/lib/security/attempts';
+ import { audit } from '@/lib/security/audit';
+ import { hashKey } from '@/lib/security/rate-limit';
+ import { getAuthState } from '@/lib/supabase/auth-state';
+-import { cameFromSetupLink, createClient } from '@/lib/supabase/server';
++import { cameFromResetLink, cameFromSetupLink, createClient } from '@/lib/supabase/server';
+ 
+ // Sign-up, sign-in and MFA (overview §10.1, US-02 to US-04). Each action runs on the server with
+ // the anon key; Supabase Auth checks the password and codes and sets the HTTP-only session cookies.
+@@ -45,16 +45,13 @@ export async function signUp(_prev: FormState, form: FormData): Promise<FormStat
+     return { error: 'Please choose a stronger password (see the rule under the field).', email };
+   }
+ 
+-  // The confirmation link comes back to this site. Supabase only sends it to an allow-listed
+-  // URL (Auth → URL Configuration); anything else falls back to the Site URL.
+-  const origin = (await headers()).get('origin');
+   const supabase = await createClient();
+   if (await tooManyAttempts(supabase)) return { error: TOO_MANY, email };
+   const { error } = await supabase.auth.signUp({
+     email: parsed.data.email,
+     password: parsed.data.password,
+     options: {
+-      emailRedirectTo: origin && URL.canParse(origin) ? `${new URL(origin).origin}/auth/confirm` : undefined,
++      emailRedirectTo: await confirmUrl(),
+       // The record of consent (overview §11): which notice, and when.
+       data: { privacy_consent: { version: PRIVACY_VERSION, at: new Date().toISOString() } },
+     },
+@@ -90,6 +87,56 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
+   redirect(status === 'error' ? '/login' : HOME[status]);
+ }
+ 
++// The confirmation and reset links come back to this site. Supabase only sends them to an
++// allow-listed URL (Auth → URL Configuration); anything else falls back to the Site URL.
++async function confirmUrl(): Promise<string | undefined> {
++  const origin = (await headers()).get('origin');
++  return origin && URL.canParse(origin) ? `${new URL(origin).origin}/auth/confirm` : undefined;
++}
++
++// Forgotten password, step 1: email a reset link. The same answer whether or not the account
++// exists, so the form can't be used to find out who has one.
++export async function requestPasswordReset(_prev: FormState, form: FormData): Promise<FormState> {
++  const email = field(form, 'email').trim();
++  const parsed = emailSchema.safeParse(email);
++  if (!parsed.success) return { error: 'Please enter a valid email address.', email };
++
++  const supabase = await createClient();
++  if (await tooManyAttempts(supabase, parsed.data)) return { error: TOO_MANY, email };
++  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo: await confirmUrl() });
++  if (error) console.error('password reset email failed', error.code, error.message);
++  await audit(supabase, 'password_reset_requested', await headers(), `account ${(await hashKey(parsed.data)).slice(0, 12)}`);
++  return { done: true };
++}
++
++// Forgotten password, step 2: after the reset link and the authenticator code, choose a new
++// password. Every other device is signed out, in case someone else knew the old one.
++export async function setNewPassword(_prev: FormState, form: FormData): Promise<FormState> {
++  const parsed = newPasswordSchema.safeParse({
++    password: field(form, 'password'),
++    confirm: field(form, 'confirm'),
++  });
++  if (!parsed.success) {
++    return parsed.error.issues[0].path[0] === 'confirm'
++      ? { error: "The two passwords don't match." }
++      : { error: 'Please choose a stronger password (see the rule under the field).' };
++  }
++  const supabase = await createClient();
++  if (!(await cameFromResetLink(supabase))) redirect('/');
++  if (await tooManyAttempts(supabase, await currentUserId(supabase))) return { error: TOO_MANY };
++  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
++  if (error) {
++    if (error.code === 'same_password') return { error: "Please choose a password you haven't used here before." };
++    if (error.code === 'weak_password') return { error: 'Please choose a stronger password.' };
++    console.error('changing the password failed', error.code, error.message);
++    return { error: "We couldn't save the password. Please try again." };
++  }
++  await audit(supabase, 'password_changed', await headers());
++  const others = await supabase.auth.signOut({ scope: 'others' });
++  if (others.error) console.error('could not sign out other devices', others.error.message);
++  redirect('/');
++}
++
+ // An invited agent chooses a password (US-32). Only for a session that came from the setup link
+ // and has no authenticator yet: a stolen password-level session can't use this to change the password.
+ export async function choosePassword(_prev: FormState, form: FormData): Promise<FormState> {
+@@ -139,7 +186,7 @@ export async function finishEnrolment(_prev: FormState, form: FormData): Promise
+     return { error: "That code didn't work. Check your app and try the newest code." };
+   }
+   await audit(supabase, 'mfa_enrolled', await headers());
+-  redirect('/');
++  redirect((await cameFromResetLink(supabase)) ? '/new-password' : '/');
+ }
+ 
+ // Every later sign-in (US-04): the code from the enrolled authenticator.
+@@ -158,7 +205,7 @@ export async function verifyCode(_prev: FormState, form: FormData): Promise<Form
+     return { error: "That code didn't work. Check your app and try the newest code." };
+   }
+   await audit(supabase, 'mfa_verified', await headers());
+-  redirect('/');
++  redirect((await cameFromResetLink(supabase)) ? '/new-password' : '/');
+ }
+ 
+ // US-14. Ends this browser's session only; other devices stay signed in.
+diff --git a/app/(auth)/forgot-password/page.tsx b/app/(auth)/forgot-password/page.tsx
+new file mode 100644
+index 0000000..c01d77f
+--- /dev/null
++++ b/app/(auth)/forgot-password/page.tsx
+@@ -0,0 +1,38 @@
++'use client';
++
++import Link from 'next/link';
++import { useActionState } from 'react';
++import { requestPasswordReset } from '../actions';
++import { Field, FormError, FormTitle, Submit } from '../ui';
++
++export default function ForgotPasswordPage() {
++  const [state, action, pending] = useActionState(requestPasswordReset, undefined);
++  if (state?.done) {
++    return (
++      <div className="space-y-3">
++        <FormTitle title="Check your email">
++          If there is an account for this email, we&apos;ve sent a link to reset the password. Open it in this browser
++          within an hour. You&apos;ll also need a code from your authenticator app. If it isn&apos;t in your inbox, look in
++          your spam folder.
++        </FormTitle>
++        <Link href="/login" className="btn btn-outline w-full">
++          Back to sign in
++        </Link>
++      </div>
++    );
++  }
++  return (
++    <form action={action} className="space-y-4">
++      <FormTitle title="Reset your password">Enter your account&apos;s email and we&apos;ll send you a link to choose a new password.</FormTitle>
++      <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
++      <FormError message={state?.error} />
++      <Submit pending={pending}>Send reset link</Submit>
++      <p className="text-center text-sm text-muted">
++        Remembered it?{' '}
++        <Link href="/login" className="link">
++          Sign in
++        </Link>
++      </p>
++    </form>
++  );
++}
+diff --git a/app/(auth)/layout.tsx b/app/(auth)/layout.tsx
+index 47a918e..e3f2153 100644
+--- a/app/(auth)/layout.tsx
++++ b/app/(auth)/layout.tsx
+@@ -1,11 +1,8 @@
+-import Link from 'next/link';
+ import { Brand } from '@/components/brand';
+ import { ShieldIcon } from '@/components/icons';
+-import { DISCLAIMER } from '@/lib/legal';
+ 
+ // Sign-in, sign-up and MFA pages: a dark panel saying what the assistant does, next to one form
+-// card. On phones the panel shrinks to a header above the card. The disclaimer (overview §13) is
+-// always visible.
++// card. On phones the panel shrinks to a header above the card.
+ export default function AuthLayout({ children }: LayoutProps<'/'>) {
+   return (
+     <main className="grid min-h-dvh md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+@@ -13,12 +10,12 @@ export default function AuthLayout({ children }: LayoutProps<'/'>) {
+         <Brand />
+         <div className="hidden space-y-5 md:block">
+           <h2 className="max-w-sm text-3xl font-semibold leading-tight text-white">
+-            Kenya Airways policies, answered with the source every time.
++            Your questions answered.
+           </h2>
+           <ul className="max-w-sm space-y-3 text-sm text-zinc-300">
+             <li className="flex gap-2">
+               <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
+-              Baggage, check-in, refunds, special assistance and more, from the published policies.
++              Baggage, check-in, refunds, special assistance and more, with the source of every answer.
+             </li>
+             <li className="flex gap-2">
+               <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
+@@ -35,14 +32,8 @@ export default function AuthLayout({ children }: LayoutProps<'/'>) {
+           <span>Every account uses a code from an authenticator app. Sign-in activity is recorded for security.</span>
+         </p>
+       </section>
+-      <section className="flex flex-col items-center justify-center gap-5 px-4 py-8">
++      <section className="flex flex-col items-center justify-center px-4 py-8">
+         <div className="card w-full max-w-sm p-6 sm:p-8">{children}</div>
+-        <footer className="w-full max-w-sm space-y-2 text-xs text-muted">
+-          <p>{DISCLAIMER}</p>
+-          <Link href="/privacy" className="link">
+-            Privacy notice
+-          </Link>
+-        </footer>
+       </section>
+     </main>
+   );
+diff --git a/app/(auth)/login/page.tsx b/app/(auth)/login/page.tsx
+index 83968d0..450d1ac 100644
+--- a/app/(auth)/login/page.tsx
++++ b/app/(auth)/login/page.tsx
+@@ -2,8 +2,11 @@ import { AGENT_IDLE_MINUTES } from '@/lib/auth/access';
+ import { SignInForm } from './sign-in-form';
+ 
+ const NOTICES: Record<string, string> = {
+-  confirmed: 'Your email is confirmed. Sign in to set up your authenticator app.',
+-  'confirm-failed': "That confirmation link didn't work or has expired. Sign up again with the same email to get a new one.",
++  confirmed:
++    'That link was opened in a different browser. If you were confirming your email, it is confirmed: sign in to continue. If you were resetting your password, ask for a new link from this browser.',
++  'confirm-failed':
++    "That link didn't work or has expired. To confirm your email, sign up again with the same email. To reset your password, ask for a new link.",
++  'password-changed': 'Your password has been changed. Sign in with the new one.',
+   'invite-failed': "That setup link didn't work or has expired. Ask your administrator for a new one.",
+   'account-deleted': 'Your account and conversations have been deleted.',
+   'agent-timeout': `For security, agent sessions end after ${AGENT_IDLE_MINUTES} minutes without activity. Please sign in again.`,
+diff --git a/app/(auth)/login/sign-in-form.tsx b/app/(auth)/login/sign-in-form.tsx
+index c79e738..e36364c 100644
+--- a/app/(auth)/login/sign-in-form.tsx
++++ b/app/(auth)/login/sign-in-form.tsx
+@@ -16,7 +16,14 @@ export function SignInForm({ notice }: { notice?: string }) {
+         </p>
+       )}
+       <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
+-      <Field label="Password" name="password" type="password" autoComplete="current-password" required />
++      <div>
++        <Field label="Password" name="password" type="password" autoComplete="current-password" required />
++        <p className="mt-1.5 text-right text-sm">
++          <Link href="/forgot-password" className="link">
++            Forgot your password?
++          </Link>
++        </p>
++      </div>
+       <FormError message={state?.error} />
+       <Submit pending={pending}>Sign in</Submit>
+       <p className="text-center text-sm text-muted">
+diff --git a/app/(auth)/mfa/verify/page.tsx b/app/(auth)/mfa/verify/page.tsx
+index 57298b3..f0258d8 100644
+--- a/app/(auth)/mfa/verify/page.tsx
++++ b/app/(auth)/mfa/verify/page.tsx
+@@ -11,14 +11,11 @@ export default function VerifyPage() {
+   return (
+     <div className="space-y-4">
+       <form action={action} className="space-y-4">
+-        <FormTitle title="Enter your code">Open your authenticator app and enter the 6-digit code for KQ Policy Assistant.</FormTitle>
++        <FormTitle title="Enter your code">Open your authenticator app and enter the 6-digit code for KQ Chatbot.</FormTitle>
+         <Field label="6-digit code" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus />
+         <FormError message={state?.error} />
+         <Submit pending={pending}>Verify</Submit>
+       </form>
+-      <p className="text-xs text-muted">
+-        Lost your authenticator? Account recovery is manual for now: contact the project owner (see the README).
+-      </p>
+       <SignOutButton className="btn btn-ok w-full" />
+     </div>
+   );
+diff --git a/app/(auth)/new-password/page.tsx b/app/(auth)/new-password/page.tsx
+new file mode 100644
+index 0000000..7581240
+--- /dev/null
++++ b/app/(auth)/new-password/page.tsx
+@@ -0,0 +1,13 @@
++import type { Metadata } from 'next';
++import { redirect } from 'next/navigation';
++import { cameFromResetLink, createClient } from '@/lib/supabase/server';
++import { PasswordForm } from '../password-form';
++
++export const metadata: Metadata = { title: 'New password · KQ Chatbot' };
++
++// The last step of a password reset. Only for a session that opened the reset link in the last
++// 15 minutes and then entered its authenticator code; everyone else goes to the chat.
++export default async function NewPasswordPage() {
++  if (!(await cameFromResetLink(await createClient()))) redirect('/');
++  return <PasswordForm purpose="reset" />;
++}
+diff --git a/app/(auth)/password-form.tsx b/app/(auth)/password-form.tsx
+new file mode 100644
+index 0000000..4980ea4
+--- /dev/null
++++ b/app/(auth)/password-form.tsx
+@@ -0,0 +1,40 @@
++'use client';
++
++import { useActionState } from 'react';
++import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
++import { choosePassword, setNewPassword } from './actions';
++import { Field, FormError, FormTitle, Submit } from './ui';
++
++// Choosing a password without the old one: an invited agent's first password (app/(auth)/welcome),
++// or a new one after a reset link (app/(auth)/new-password).
++const PURPOSES = {
++  agent: { action: choosePassword, title: 'Set up your agent account', intro: "Choose a password. Next you'll set up an authenticator app." },
++  reset: { action: setNewPassword, title: 'Choose a new password', intro: "You'll use it with your authenticator app from now on." },
++};
++
++export function PasswordForm({ purpose }: { purpose: keyof typeof PURPOSES }) {
++  const { action: save, title, intro } = PURPOSES[purpose];
++  const [state, action, pending] = useActionState(save, undefined);
++  return (
++    <form action={action} className="space-y-4">
++      <FormTitle title={title}>{intro}</FormTitle>
++      <div>
++        <Field
++          label="Password"
++          name="password"
++          type="password"
++          autoComplete="new-password"
++          minLength={PASSWORD_MIN}
++          required
++          aria-describedby="password-rule"
++        />
++        <p id="password-rule" className="mt-1 text-xs text-muted">
++          Use {PASSWORD_RULE}.
++        </p>
++      </div>
++      <Field label="Confirm password" name="confirm" type="password" autoComplete="new-password" required />
++      <FormError message={state?.error} />
++      <Submit pending={pending}>Save password</Submit>
++    </form>
++  );
++}
+diff --git a/app/(auth)/welcome/choose-password-form.tsx b/app/(auth)/welcome/choose-password-form.tsx
+deleted file mode 100644
+index 7e7483f..0000000
+--- a/app/(auth)/welcome/choose-password-form.tsx
++++ /dev/null
+@@ -1,32 +0,0 @@
+-'use client';
+-
+-import { useActionState } from 'react';
+-import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
+-import { choosePassword } from '../actions';
+-import { Field, FormError, FormTitle, Submit } from '../ui';
+-
+-export function ChoosePasswordForm() {
+-  const [state, action, pending] = useActionState(choosePassword, undefined);
+-  return (
+-    <form action={action} className="space-y-4">
+-      <FormTitle title="Set up your agent account">Choose a password. Next you&apos;ll set up an authenticator app.</FormTitle>
+-      <div>
+-        <Field
+-          label="Password"
+-          name="password"
+-          type="password"
+-          autoComplete="new-password"
+-          minLength={PASSWORD_MIN}
+-          required
+-          aria-describedby="password-rule"
+-        />
+-        <p id="password-rule" className="mt-1 text-xs text-muted">
+-          Use {PASSWORD_RULE}.
+-        </p>
+-      </div>
+-      <Field label="Confirm password" name="confirm" type="password" autoComplete="new-password" required />
+-      <FormError message={state?.error} />
+-      <Submit pending={pending}>Save password</Submit>
+-    </form>
+-  );
+-}
+diff --git a/app/(auth)/welcome/page.tsx b/app/(auth)/welcome/page.tsx
+index 544fd3b..3d82a94 100644
+--- a/app/(auth)/welcome/page.tsx
++++ b/app/(auth)/welcome/page.tsx
+@@ -1,10 +1,10 @@
+ import { redirect } from 'next/navigation';
+ import { cameFromSetupLink, createClient } from '@/lib/supabase/server';
+-import { ChoosePasswordForm } from './choose-password-form';
++import { PasswordForm } from '../password-form';
+ 
+ // Where an invited agent lands from their setup link (US-32): choose a password, then set up an
+ // authenticator. Anyone else is sent on (proxy.ts already limits this page to accounts without one).
+ export default async function WelcomePage() {
+   if (!(await cameFromSetupLink(await createClient()))) redirect('/mfa/enroll');
+-  return <ChoosePasswordForm />;
++  return <PasswordForm purpose="agent" />;
+ }
+diff --git a/app/(chat)/admin/page.tsx b/app/(chat)/admin/page.tsx
+index 2f10a6f..0205d46 100644
+--- a/app/(chat)/admin/page.tsx
++++ b/app/(chat)/admin/page.tsx
+@@ -7,7 +7,7 @@ import { getInsights } from '@/lib/admin/insights';
+ import { requireAal2 } from '@/lib/supabase/server';
+ import { AnswerText } from '../answer-text';
+ 
+-export const metadata: Metadata = { title: 'Insights · KQ Policy Assistant', robots: { index: false, follow: false } };
++export const metadata: Metadata = { title: 'Insights · KQ Chatbot', robots: { index: false, follow: false } };
+ 
+ const percent = (part: number, whole: number) => (whole === 0 ? '–' : `${Math.round((part / whole) * 100)}%`);
+ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+@@ -94,7 +94,7 @@ export default async function AdminPage() {
+         )}
+       </Panel>
+ 
+-      <Panel title="Knowledge gaps" description="Escalated questions, grouped when they share most of their words. Add policies for the top ones.">
++      <Panel title="Knowledge gaps" description="Escalated questions, grouped when they share most of their words. Add information for the top ones.">
+         {gaps.length === 0 ? (
+           <p className="text-sm text-muted">No escalations.</p>
+         ) : (
+diff --git a/app/(chat)/chat.tsx b/app/(chat)/chat.tsx
+index a34d602..a539fe1 100644
+--- a/app/(chat)/chat.tsx
++++ b/app/(chat)/chat.tsx
+@@ -6,7 +6,6 @@ import Link from 'next/link';
+ import { useChat } from '@ai-sdk/react';
+ import { DefaultChatTransport } from 'ai';
+ import { SendIcon } from '@/components/icons';
+-import { DISCLAIMER } from '@/lib/legal';
+ import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
+ import type { ChatMessage, Role, Source } from '@/lib/rag/types';
+ import { AnswerText } from './answer-text';
+@@ -118,14 +117,14 @@ function CustomerWording({ text }: { text: string | null }) {
+     return (
+       <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+         <p className="font-semibold">Customer-ready wording</p>
+-        <p>None for this answer: no public policy covers it. Don&apos;t read the internal steps to the caller.</p>
++        <p>None for this answer: no public information covers it. Don&apos;t read the internal steps to the caller.</p>
+       </div>
+     );
+   }
+   return (
+     <div className="mt-3 rounded-lg border border-ok bg-ok-soft p-3 text-sm text-foreground">
+       <div className="flex items-center justify-between gap-2">
+-        <p className="text-xs font-semibold text-ok">Customer-ready wording (public policy only)</p>
++        <p className="text-xs font-semibold text-ok">Customer-ready wording (public information only)</p>
+         <CopyButton text={text} className="btn btn-ok btn-sm" />
+       </div>
+       <p className="mt-1">{text}</p>
+@@ -188,8 +187,8 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+             </h1>
+             <p className="mt-2 text-sm text-muted">
+               {role === 'agent'
+-                ? "Describe the caller's situation, or start with a common call. Answers use public policies and internal procedures."
+-                : 'Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
++                ? "Describe the caller's situation, or start with a common call. Answers use public information and internal procedures."
++                : 'Ask a question about your Kenya Airways trip, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
+             </p>
+           </div>
+         )}
+@@ -220,7 +219,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+               }
+             >
+               {m.role === 'assistant' && (
+-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Policy Assistant</p>
++                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Chatbot</p>
+               )}
+               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
+               {m.role === 'user' ? (
+@@ -276,7 +275,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+                 <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
+                 <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
+               </span>
+-              Checking the policies…
++              Finding your answer…
+             </div>
+           </div>
+         )}
+@@ -301,7 +300,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+             value={input}
+             maxLength={1000}
+             aria-label="Your question"
+-            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
++            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask a question about your trip...'}
+             onChange={(e) => setInput(e.target.value)}
+             disabled={busy}
+           />
+@@ -311,7 +310,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+           </button>
+         </div>
+         <p className="mt-2 px-1 text-center text-xs text-muted">
+-          Please don&apos;t share booking references, passport, card or medical details. {DISCLAIMER}{' '}
++          Please don&apos;t share booking references, passport, card or medical details.{' '}
+           <Link href="/privacy" className="underline">
+             Privacy
+           </Link>
+diff --git a/app/(chat)/checklist/page.tsx b/app/(chat)/checklist/page.tsx
+index 4ff96a9..a699c0f 100644
+--- a/app/(chat)/checklist/page.tsx
++++ b/app/(chat)/checklist/page.tsx
+@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
+ import { requireAal2 } from '@/lib/supabase/server';
+ import { TripChecklist } from './trip-checklist';
+ 
+-export const metadata: Metadata = { title: 'Pre-travel checklist · KQ Policy Assistant' };
++export const metadata: Metadata = { title: 'Pre-travel checklist · KQ Chatbot' };
+ 
+ // Overview §7.10. Passengers only.
+ export default async function ChecklistPage() {
+diff --git a/app/(chat)/checklist/trip-checklist.tsx b/app/(chat)/checklist/trip-checklist.tsx
+index e71ac73..0d7134f 100644
+--- a/app/(chat)/checklist/trip-checklist.tsx
++++ b/app/(chat)/checklist/trip-checklist.tsx
+@@ -2,7 +2,6 @@
+ 
+ import { useState } from 'react';
+ import { PageHeader } from '@/components/page-header';
+-import { DISCLAIMER } from '@/lib/legal';
+ import type { ChecklistSection } from '@/lib/rag/checklist';
+ import type { ContactDetails } from '@/lib/rag/prompts';
+ 
+@@ -45,7 +44,7 @@ export function TripChecklist() {
+     <div className="mx-auto w-full max-w-3xl flex-1 space-y-5 overflow-y-auto px-4 py-6 print:overflow-visible">
+       <PageHeader
+         title="Pre-travel checklist"
+-        description="Tell us about your trip and get one checklist from Kenya Airways policies, with the source of every item."
++        description="Tell us about your trip and get one checklist that answers your Kenya Airways questions, with the source of every item."
+       />
+       <form
+         className="card card-brand space-y-3 p-4 print:hidden"
+@@ -103,7 +102,7 @@ export function TripChecklist() {
+       {result?.kind === 'checklist' && (
+         <section aria-label="Your checklist" className="space-y-4">
+           <div className="flex items-center justify-between gap-2">
+-            <p className="text-sm text-muted">Built on {today()} from Kenya Airways policies.</p>
++            <p className="text-sm text-muted">Built on {today()} from Kenya Airways information.</p>
+             <button type="button" onClick={() => window.print()} className="btn btn-outline print:hidden">
+               Save as PDF
+             </button>
+@@ -157,7 +156,6 @@ export function TripChecklist() {
+               )}
+             </div>
+           )}
+-          <p className="text-xs text-muted">{DISCLAIMER}</p>
+         </section>
+       )}
+     </div>
+diff --git a/app/(chat)/settings/page.tsx b/app/(chat)/settings/page.tsx
+index 56f7705..a0ef299 100644
+--- a/app/(chat)/settings/page.tsx
++++ b/app/(chat)/settings/page.tsx
+@@ -11,7 +11,7 @@ import { DeleteAccount } from './delete-account';
+ import { ReplaceAuthenticator } from './replace-authenticator';
+ import { SharedLinks } from './shared-links';
+ 
+-export const metadata: Metadata = { title: 'Settings · KQ Policy Assistant' };
++export const metadata: Metadata = { title: 'Settings · KQ Chatbot' };
+ 
+ const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+ 
+diff --git a/app/auth/confirm/route.ts b/app/auth/confirm/route.ts
+index 84062cd..c0106f2 100644
+--- a/app/auth/confirm/route.ts
++++ b/app/auth/confirm/route.ts
+@@ -1,10 +1,11 @@
+ import type { EmailOtpType } from '@supabase/supabase-js';
+ import { redirect } from 'next/navigation';
+ import type { NextRequest } from 'next/server';
++import { openedResetLink } from '@/lib/auth/access';
+ import { audit } from '@/lib/security/audit';
+ import { createClient } from '@/lib/supabase/server';
+ 
+-// Two kinds of link land here, and the destinations are fixed, so this can't be used as an open redirect.
++// Three kinds of link land here, and the destinations are fixed, so this can't be used as an open redirect.
+ //
+ // 1. Supabase's default sign-up email (US-02). Supabase confirms the email address when the link
+ //    is opened, then sends the user here with a one-time code. In the browser they signed up in,
+@@ -13,6 +14,9 @@ import { createClient } from '@/lib/supabase/server';
+ //    browser), but the email is already confirmed, so they are asked to sign in.
+ // 2. An agent's setup link from `npm run invite-agent` (US-32), with a one-time token. Checking it
+ //    signs the agent in, and they go on to choose a password, then set up an authenticator.
++// 3. A password reset email (app/(auth)/forgot-password). Like the sign-up link, it only works in
++//    the browser that asked for it. The user then enters their authenticator code before they can
++//    choose a new password (app/(auth)/new-password), so the email alone can't take over an account.
+ const AGENT_LINK_TYPES: EmailOtpType[] = ['invite', 'magiclink'];
+ 
+ export async function GET(request: NextRequest) {
+@@ -33,6 +37,12 @@ export async function GET(request: NextRequest) {
+   const supabase = await createClient();
+   const { error } = await supabase.auth.exchangeCodeForSession(code);
+   if (error) redirect('/login?notice=confirmed');
++  const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
++  if (data && openedResetLink(data.currentAuthenticationMethods)) {
++    await audit(supabase, 'email_confirmed', request.headers, 'password reset link');
++    // proxy.ts sends anyone without an authenticator yet on to set one up first.
++    redirect('/mfa/verify');
++  }
+   await audit(supabase, 'email_confirmed', request.headers);
+   redirect('/mfa/enroll');
+ }
+diff --git a/app/global-error.tsx b/app/global-error.tsx
+index 997f131..e28000b 100644
+--- a/app/global-error.tsx
++++ b/app/global-error.tsx
+@@ -6,7 +6,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
+   return (
+     <html lang="en">
+       <body>
+-        <title>Something went wrong · KQ Policy Assistant</title>
++        <title>Something went wrong · KQ Chatbot</title>
+         <h1>Sorry, something went wrong</h1>
+         <p>Please try again. If it keeps happening, come back a little later.</p>
+         {error.digest && <p>Reference: {error.digest}</p>}
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 073e477..3762949 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
+ });
+ 
+ export const metadata: Metadata = {
+-  title: "KQ Policy Assistant",
++  title: "KQ Chatbot",
+   description:
+-    "A policy assistant for Kenya Airways passengers and call-centre agents. Independent academic project, not affiliated with Kenya Airways.",
++    "Answers to Kenya Airways travel questions for passengers and call-centre agents. Independent academic project, not affiliated with Kenya Airways.",
+ };
+ 
+ // Every page is rendered per request, so it can carry that request's CSP nonce (proxy.ts).
+diff --git a/app/privacy/page.tsx b/app/privacy/page.tsx
+index 57e8751..38a53c2 100644
+--- a/app/privacy/page.tsx
++++ b/app/privacy/page.tsx
+@@ -3,7 +3,7 @@ import Link from 'next/link';
+ import { Brand } from '@/components/brand';
+ import { DISCLAIMER, PRIVACY_VERSION } from '@/lib/legal';
+ 
+-export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistant' };
++export const metadata: Metadata = { title: 'Privacy notice · KQ Chatbot' };
+ 
+ // Overview §11. Public, so it can be read before signing up.
+ export default function PrivacyPage() {
+diff --git a/app/s/[id]/page.tsx b/app/s/[id]/page.tsx
+index cab6a66..c677960 100644
+--- a/app/s/[id]/page.tsx
++++ b/app/s/[id]/page.tsx
+@@ -4,11 +4,10 @@ import { createClient } from '@supabase/supabase-js';
+ import { Brand } from '@/components/brand';
+ import { getSharedAnswer } from '@/lib/chat/shares';
+ import { getServerEnv } from '@/lib/env';
+-import { DISCLAIMER } from '@/lib/legal';
+ import { AnswerText } from '../../(chat)/answer-text';
+ 
+ // Shared links are private by intent: keep them out of search engines.
+-export const metadata: Metadata = { title: 'Shared answer · KQ Policy Assistant', robots: { index: false, follow: false } };
++export const metadata: Metadata = { title: 'Shared answer · KQ Chatbot', robots: { index: false, follow: false } };
+ 
+ const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+ 
+@@ -34,7 +33,7 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
+         <p className="card p-4">This link has expired or was turned off by the person who shared it.</p>
+       ) : (
+         <>
+-          <p className="text-sm text-muted">Answered on {longDate(shared.answeredAt)}. Policies change, so check the sources for the latest rules.</p>
++          <p className="text-sm text-muted">Answered on {longDate(shared.answeredAt)}. Rules change, so check the sources for the latest.</p>
+           {shared.question && (
+             <div className="flex justify-end">
+               <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white">
+@@ -68,7 +67,6 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
+           </div>
+         </>
+       )}
+-      <p className="text-xs text-muted">{DISCLAIMER}</p>
+       <Link href="/" className="btn btn-primary">
+         Ask your own question
+       </Link>
+diff --git a/components/brand.tsx b/components/brand.tsx
+index 8429823..580e830 100644
+--- a/components/brand.tsx
++++ b/components/brand.tsx
+@@ -1,5 +1,4 @@
+-// The app's name with a small plane mark. Not the airline's logo: this is an independent
+-// project, and the disclaimer says so on every page.
++// The app's name with a small plane mark. Not the airline's logo: this is an independent project.
+ export function Brand({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
+   return (
+     <span className="flex items-center gap-2">
+@@ -9,8 +8,8 @@ export function Brand({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
+         </svg>
+       </span>
+       <span className="leading-tight">
+-        <span className={`block text-sm font-bold ${tone === 'dark' ? 'text-white' : 'text-foreground'}`}>KQ Policy Assistant</span>
+-        <span className={`block text-[11px] ${tone === 'dark' ? 'text-zinc-400' : 'text-muted'}`}>Travel policy answers with sources</span>
++        <span className={`block text-sm font-bold ${tone === 'dark' ? 'text-white' : 'text-foreground'}`}>KQ Chatbot</span>
++        <span className={`block text-[11px] ${tone === 'dark' ? 'text-zinc-400' : 'text-muted'}`}>Your travel questions answered</span>
+       </span>
+     </span>
+   );
+diff --git a/lib/auth/access.test.ts b/lib/auth/access.test.ts
+index 482dbbe..f5dd376 100644
+--- a/lib/auth/access.test.ts
++++ b/lib/auth/access.test.ts
+@@ -1,6 +1,6 @@
+ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+-import { accessFor, agentNeedsCode, type AuthStatus } from './access';
++import { accessFor, agentNeedsCode, openedResetLink, type AuthStatus } from './access';
+ 
+ const ALL: AuthStatus[] = ['signed_out', 'needs_enrol', 'needs_verify', 'aal2', 'error'];
+ 
+@@ -29,7 +29,7 @@ test('a path that only looks like the API is still a protected page', () => {
+ });
+ 
+ test('sign-in pages are for signed-out users, and stay open when the check fails', () => {
+-  for (const path of ['/login', '/signup']) {
++  for (const path of ['/login', '/signup', '/forgot-password']) {
+     assert.deepEqual(accessFor(path, 'signed_out'), { action: 'allow' });
+     assert.deepEqual(accessFor(path, 'error'), { action: 'allow' });
+     assert.deepEqual(accessFor(path, 'aal2'), { action: 'redirect', to: '/' });
+@@ -88,3 +88,14 @@ test('an agent enters a new code once the last one is over 8 hours old', () => {
+   assert.equal(agentNeedsCode([{ method: 'password', timestamp: at(0) }], now), true);
+   assert.equal(agentNeedsCode([], now), true);
+ });
++
++test('a new password can be chosen only within 15 minutes of opening a reset link', () => {
++  const now = Date.UTC(2026, 9, 22, 12);
++  const at = (minutesAgo: number) => Math.floor((now - minutesAgo * 60 * 1000) / 1000);
++  assert.equal(openedResetLink([{ method: 'recovery', timestamp: at(2) }, { method: 'totp', timestamp: at(1) }], now), true);
++  assert.equal(openedResetLink([{ method: 'recovery', timestamp: at(16) }, { method: 'totp', timestamp: at(1) }], now), false);
++  // A normal sign-in, or an older token that lists bare method names, never counts.
++  assert.equal(openedResetLink([{ method: 'password', timestamp: at(1) }, { method: 'totp', timestamp: at(1) }], now), false);
++  assert.equal(openedResetLink(['recovery'], now), false);
++  assert.equal(openedResetLink([], now), false);
++});
+diff --git a/lib/auth/access.ts b/lib/auth/access.ts
+index e011ea1..0c4665a 100644
+--- a/lib/auth/access.ts
++++ b/lib/auth/access.ts
+@@ -22,7 +22,7 @@ export const HOME: Record<Exclude<AuthStatus, 'error'>, string> = {
+ // answers (/s/<id>, overview §7.15), which show only what the owner chose to share.
+ const PUBLIC_PAGES = new Set(['/privacy']);
+ const isSharedAnswer = (pathname: string) => /^\/s\/[^/]+$/.test(pathname);
+-const SIGNED_OUT_PAGES = new Set(['/login', '/signup']);
++const SIGNED_OUT_PAGES = new Set(['/login', '/signup', '/forgot-password']);
+ // /welcome is where an invited agent chooses a password, before setting up an authenticator.
+ // The page also checks that the session came from the invitation link (app/(auth)/welcome).
+ const MFA_PAGES: Record<string, AuthStatus> = { '/mfa/enroll': 'needs_enrol', '/welcome': 'needs_enrol', '/mfa/verify': 'needs_verify' };
+@@ -42,6 +42,16 @@ export function agentNeedsCode(methods: SignInMethod[], now = Date.now()): boole
+   return now - newest > AGENT_CODE_MAX_HOURS * 3600 * 1000;
+ }
+ 
++// A password reset link signs the user in with the method 'recovery'. They may choose a new password
++// only after they also enter their authenticator code, and only within 15 minutes of opening the link.
++export const RESET_WINDOW_MINUTES = 15;
++
++export function openedResetLink(methods: SignInMethod[], now = Date.now()): boolean {
++  return methods.some(
++    (m) => typeof m === 'object' && m.method === 'recovery' && now - m.timestamp * 1000 <= RESET_WINDOW_MINUTES * 60 * 1000,
++  );
++}
++
+ const allow: Access = { action: 'allow' };
+ const redirect = (to: string): Access => ({ action: 'redirect', to });
+ 
+diff --git a/lib/auth/mfa.ts b/lib/auth/mfa.ts
+index adf3800..507893c 100644
+--- a/lib/auth/mfa.ts
++++ b/lib/auth/mfa.ts
+@@ -12,7 +12,7 @@ export async function newTotpFactor(supabase: SupabaseClient): Promise<EnrolStar
+   }
+   const { data, error } = await supabase.auth.mfa.enroll({
+     factorType: 'totp',
+-    issuer: 'KQ Policy Assistant',
++    issuer: 'KQ Chatbot',
+     // Names must be unique per user, and a replacement sits next to the old one for a moment.
+     friendlyName: `Authenticator app (${new Date().toISOString().slice(0, 19).replace('T', ' ')})`,
+   });
+diff --git a/lib/auth/schemas.ts b/lib/auth/schemas.ts
+index 200ce1e..fcca2ce 100644
+--- a/lib/auth/schemas.ts
++++ b/lib/auth/schemas.ts
+@@ -21,7 +21,7 @@ export const signUpSchema = z
+   .object({ email: emailSchema, password: passwordSchema, confirm: z.string(), consent: z.literal(true) })
+   .refine((v) => v.password === v.confirm, { path: ['confirm'] });
+ 
+-// An invited agent choosing their password (US-32).
++// An invited agent choosing their password (US-32), or anyone choosing a new one after a reset link.
+ export const newPasswordSchema = z
+   .object({ password: passwordSchema, confirm: z.string() })
+   .refine((v) => v.password === v.confirm, { path: ['confirm'] });
+diff --git a/lib/security/audit.ts b/lib/security/audit.ts
+index 6342386..55abc22 100644
+--- a/lib/security/audit.ts
++++ b/lib/security/audit.ts
+@@ -24,7 +24,9 @@ export type AuditEvent =
+   | 'staff_content_blocked'
+   | 'admin_granted'
+   | 'admin_removed'
+-  | 'admin_viewed';
++  | 'admin_viewed'
++  | 'password_reset_requested'
++  | 'password_changed';
+ 
+ // Best effort: a failed write is logged on the server and never blocks the user's request.
+ export async function audit(supabase: SupabaseClient, event: AuditEvent, headers: Headers | null, detail?: string): Promise<void> {
+diff --git a/lib/supabase/server.ts b/lib/supabase/server.ts
+index d9e1f3d..cdd11b3 100644
+--- a/lib/supabase/server.ts
++++ b/lib/supabase/server.ts
+@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
+ import type { SupabaseClient, User } from '@supabase/supabase-js';
+ import { cookies } from 'next/headers';
+ import { redirect } from 'next/navigation';
+-import { HOME } from '../auth/access';
++import { HOME, openedResetLink } from '../auth/access';
+ import { getServerEnv } from '../env';
+ import type { Role } from '../rag/types';
+ import { COOKIE_OPTIONS, getAuthState } from './auth-state';
+@@ -50,3 +50,12 @@ export async function cameFromSetupLink(supabase: SupabaseClient): Promise<boole
+   const hourAgo = Date.now() / 1000 - 3600;
+   return data.currentAuthenticationMethods.some((m) => typeof m === 'object' && m.method === 'otp' && m.timestamp > hourAgo);
+ }
++
++// True when a fully signed-in session (password reset link plus authenticator code) opened the
++// reset link in the last 15 minutes. Only then may the password be changed without the old one
++// (app/(auth)/new-password). A stolen session without the link can't use this.
++export async function cameFromResetLink(supabase: SupabaseClient): Promise<boolean> {
++  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
++  if (error || !data || data.currentLevel !== 'aal2') return false;
++  return openedResetLink(data.currentAuthenticationMethods);
++}
+diff --git a/supabase/migrations/20261024090000_password_reset.sql b/supabase/migrations/20261024090000_password_reset.sql
+new file mode 100644
+index 0000000..498d549
+--- /dev/null
++++ b/supabase/migrations/20261024090000_password_reset.sql
+@@ -0,0 +1,24 @@
++-- Audit events for the forgotten-password flow (app/(auth)/forgot-password, app/(auth)/new-password).
++alter type public.audit_event add value if not exists 'password_reset_requested';
++alter type public.audit_event add value if not exists 'password_changed';
++
++-- A reset is asked for while signed out, so log_event must accept it without a user, like a failed
++-- sign-in. Otherwise unchanged from 20261022170000_audit_retention_deletion.sql. plpgsql only
++-- checks the new enum value when it runs, after this migration has committed.
++create or replace function public.log_event(p_event public.audit_event, p_ip text default null, p_detail text default null)
++returns void
++language plpgsql volatile security definer set search_path = '' as $$
++declare
++  v_user uuid := auth.uid();
++begin
++  if v_user is null and p_event::text not in ('sign_up', 'sign_in_failed', 'mfa_failed', 'rate_limited', 'password_reset_requested') then
++    return;
++  end if;
++  -- A flood cap: the function is callable by anyone, so a script can't grow the table without bound.
++  if (select count(*) from public.audit_log where created_at > now() - interval '1 minute') >= 1000 then
++    return;
++  end if;
++  insert into public.audit_log (user_id, event, ip, detail)
++  values (v_user, p_event, left(p_ip, 64), left(p_detail, 200));
++end;
++$$;
+diff --git a/supabase/tests/audit.test.sql b/supabase/tests/audit.test.sql
+index c812d1c..d67e828 100644
+--- a/supabase/tests/audit.test.sql
++++ b/supabase/tests/audit.test.sql
+@@ -3,7 +3,7 @@ begin;
+ create extension if not exists pgtap with schema extensions;
+ set local search_path = public, extensions;
+ 
+-select plan(22);
++select plan(24);
+ 
+ insert into auth.users (id, email) values
+   ('51111111-1111-1111-1111-111111111111', 'leaving@example.test'),
+@@ -28,10 +28,13 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
+ select throws_ok('select count(*) from public.audit_log', '42501', null, 'anon cannot read the audit log');
+ select lives_ok($$select public.log_event('sign_in_failed', '196.201.214.0', null)$$, 'anon can record a failed sign-in');
+ select lives_ok($$select public.log_event('mfa_enrolled')$$, 'anon asking for a signed-in event is ignored, not an error');
++select lives_ok($$select public.log_event('password_reset_requested', null, 'account abc')$$, 'anon can record a password reset request');
+ reset role;
+ select is((select count(*)::int from public.audit_log where event = 'sign_in_failed' and user_id is null and ip = '196.201.214.0'), 1,
+   'the failed sign-in was recorded without a user');
+ select is((select count(*)::int from public.audit_log where event = 'mfa_enrolled'), 0, 'an anonymous signed-in event was dropped');
++select is((select count(*)::int from public.audit_log where event = 'password_reset_requested' and user_id is null), 1,
++  'the reset request was recorded without a user');
+ 
+ set local role authenticated;
+ select set_config('request.jwt.claims',
