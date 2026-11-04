@@ -1,0 +1,2483 @@
+diff --git a/app/(auth)/layout.tsx b/app/(auth)/layout.tsx
+index 9a68860..47a918e 100644
+--- a/app/(auth)/layout.tsx
++++ b/app/(auth)/layout.tsx
+@@ -1,25 +1,49 @@
+ import Link from 'next/link';
++import { Brand } from '@/components/brand';
++import { ShieldIcon } from '@/components/icons';
+ import { DISCLAIMER } from '@/lib/legal';
+ 
+-// Sign-in, sign-up and MFA pages: one narrow card, centred, with what the assistant covers and
+-// the disclaimer (overview §13) underneath.
++// Sign-in, sign-up and MFA pages: a dark panel saying what the assistant does, next to one form
++// card. On phones the panel shrinks to a header above the card. The disclaimer (overview §13) is
++// always visible.
+ export default function AuthLayout({ children }: LayoutProps<'/'>) {
+   return (
+-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4">
+-      <div className="w-full max-w-sm rounded-lg border border-gray-300 bg-surface p-6 text-black shadow">
+-        <p className="mb-4 text-sm font-semibold text-blue-700">KQ Policy Assistant</p>
+-        {children}
+-      </div>
+-      <footer className="w-full max-w-sm space-y-2 text-xs text-gray-600">
+-        <p>
+-          Answers questions about Kenya Airways&apos; published policies, such as baggage, check-in, refunds and special
+-          assistance, and shows the source of each answer.
++    <main className="grid min-h-dvh md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
++      <section className="sidebar flex flex-col justify-between gap-8 px-6 py-8 md:px-10 md:py-12">
++        <Brand />
++        <div className="hidden space-y-5 md:block">
++          <h2 className="max-w-sm text-3xl font-semibold leading-tight text-white">
++            Kenya Airways policies, answered with the source every time.
++          </h2>
++          <ul className="max-w-sm space-y-3 text-sm text-zinc-300">
++            <li className="flex gap-2">
++              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
++              Baggage, check-in, refunds, special assistance and more, from the published policies.
++            </li>
++            <li className="flex gap-2">
++              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
++              Questions it can&apos;t answer go to Kenya Airways customer service, never a guess.
++            </li>
++            <li className="flex gap-2">
++              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
++              Call-centre agents get their internal procedures too, by invitation.
++            </li>
++          </ul>
++        </div>
++        <p className="hidden max-w-sm items-start gap-2 text-xs text-zinc-400 md:flex">
++          <ShieldIcon />
++          <span>Every account uses a code from an authenticator app. Sign-in activity is recorded for security.</span>
+         </p>
+-        <p>{DISCLAIMER}</p>
+-        <Link href="/privacy" className="text-blue-700 underline">
+-          Privacy notice
+-        </Link>
+-      </footer>
++      </section>
++      <section className="flex flex-col items-center justify-center gap-5 px-4 py-8">
++        <div className="card w-full max-w-sm p-6 sm:p-8">{children}</div>
++        <footer className="w-full max-w-sm space-y-2 text-xs text-muted">
++          <p>{DISCLAIMER}</p>
++          <Link href="/privacy" className="link">
++            Privacy notice
++          </Link>
++        </footer>
++      </section>
+     </main>
+   );
+ }
+diff --git a/app/(auth)/login/sign-in-form.tsx b/app/(auth)/login/sign-in-form.tsx
+index d10c11e..c79e738 100644
+--- a/app/(auth)/login/sign-in-form.tsx
++++ b/app/(auth)/login/sign-in-form.tsx
+@@ -3,21 +3,25 @@
+ import Link from 'next/link';
+ import { useActionState } from 'react';
+ import { signIn } from '../actions';
+-import { Field, FormError, Submit } from '../ui';
++import { Field, FormError, FormTitle, Submit } from '../ui';
+ 
+ export function SignInForm({ notice }: { notice?: string }) {
+   const [state, action, pending] = useActionState(signIn, undefined);
+   return (
+     <form action={action} className="space-y-4">
+-      <h1 className="text-xl font-semibold">Sign in</h1>
+-      {notice && <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">{notice}</p>}
++      <FormTitle title="Welcome back">Sign in with your email and password. Next you&apos;ll enter a code from your authenticator app.</FormTitle>
++      {notice && (
++        <p role="status" className="notice notice-ok">
++          {notice}
++        </p>
++      )}
+       <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
+       <Field label="Password" name="password" type="password" autoComplete="current-password" required />
+       <FormError message={state?.error} />
+       <Submit pending={pending}>Sign in</Submit>
+-      <p className="text-sm">
++      <p className="text-center text-sm text-muted">
+         New here?{' '}
+-        <Link href="/signup" className="text-blue-700 underline">
++        <Link href="/signup" className="link">
+           Create an account
+         </Link>
+       </p>
+diff --git a/app/(auth)/mfa/enroll/page.tsx b/app/(auth)/mfa/enroll/page.tsx
+index 4e97fa8..91dbbcb 100644
+--- a/app/(auth)/mfa/enroll/page.tsx
++++ b/app/(auth)/mfa/enroll/page.tsx
+@@ -3,7 +3,7 @@
+ import { useActionState, useState, useTransition } from 'react';
+ import type { EnrolStart } from '@/lib/auth/mfa';
+ import { finishEnrolment, startEnrolment } from '../../actions';
+-import { Field, FormError, Submit } from '../../ui';
++import { Field, FormError, FormTitle, Submit } from '../../ui';
+ import { SignOutButton } from '../../sign-out-button';
+ import { QrCode } from './qr-code';
+ 
+@@ -15,11 +15,10 @@ export default function EnrolPage() {
+ 
+   return (
+     <div className="space-y-4">
+-      <h1 className="text-xl font-semibold">Set up your authenticator app</h1>
+-      <p className="text-sm">
++      <FormTitle title="Set up your authenticator app">
+         Every account needs an authenticator app, such as Google Authenticator or Microsoft Authenticator. You&apos;ll
+         enter a code from it each time you sign in.
+-      </p>
++      </FormTitle>
+       {!start?.ok ? (
+         <>
+           <FormError message={start && !start.ok ? start.error : null} />
+@@ -27,7 +26,7 @@ export default function EnrolPage() {
+             type="button"
+             disabled={starting}
+             onClick={() => startTransition(async () => setStart(await startEnrolment()))}
+-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
++            className="btn btn-primary w-full"
+           >
+             {starting ? 'Please wait…' : 'Show the QR code'}
+           </button>
+@@ -36,12 +35,12 @@ export default function EnrolPage() {
+         <form action={action} className="space-y-4">
+           <QrCode qr={start.qr} secret={start.secret} />
+           <input type="hidden" name="factorId" value={start.factorId} />
+-          <Field label="6-digit code from the app" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
++          <Field label="6-digit code from the app" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+           <FormError message={state?.error} />
+           <Submit pending={pending}>Finish setup</Submit>
+         </form>
+       )}
+-      <SignOutButton />
++      <SignOutButton className="btn btn-ok w-full" />
+     </div>
+   );
+ }
+diff --git a/app/(auth)/mfa/enroll/qr-code.tsx b/app/(auth)/mfa/enroll/qr-code.tsx
+index d906889..fee9638 100644
+--- a/app/(auth)/mfa/enroll/qr-code.tsx
++++ b/app/(auth)/mfa/enroll/qr-code.tsx
+@@ -4,10 +4,10 @@ export function QrCode({ qr, secret }: { qr: string; secret: string }) {
+     <div className="space-y-2">
+       <p className="text-sm">Scan this QR code with the app:</p>
+       {/* eslint-disable-next-line @next/next/no-img-element -- a data URL, nothing to optimise */}
+-      <img src={qr} alt="QR code for your authenticator app" width={180} height={180} className="mx-auto bg-surface" />
+-      <p className="text-sm">
++      <img src={qr} alt="QR code for your authenticator app" width={180} height={180} className="mx-auto rounded-lg border border-line bg-white p-2" />
++      <p className="text-sm text-muted">
+         Or enter this key by hand:{' '}
+-        <code className="break-all rounded bg-gray-100 px-1 font-mono text-xs">{secret}</code>
++        <code className="break-all rounded bg-background px-1 font-mono text-xs text-foreground">{secret}</code>
+       </p>
+     </div>
+   );
+diff --git a/app/(auth)/mfa/verify/page.tsx b/app/(auth)/mfa/verify/page.tsx
+index 49ea19f..57298b3 100644
+--- a/app/(auth)/mfa/verify/page.tsx
++++ b/app/(auth)/mfa/verify/page.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { useActionState } from 'react';
+ import { verifyCode } from '../../actions';
+-import { Field, FormError, Submit } from '../../ui';
++import { Field, FormError, FormTitle, Submit } from '../../ui';
+ import { SignOutButton } from '../../sign-out-button';
+ 
+ // Every sign-in after the first (US-04): the password got the user to AAL1; the code makes it AAL2.
+@@ -11,16 +11,15 @@ export default function VerifyPage() {
+   return (
+     <div className="space-y-4">
+       <form action={action} className="space-y-4">
+-        <h1 className="text-xl font-semibold">Enter your code</h1>
+-        <p className="text-sm">Open your authenticator app and enter the 6-digit code for KQ Policy Assistant.</p>
+-        <Field label="Code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus />
++        <FormTitle title="Enter your code">Open your authenticator app and enter the 6-digit code for KQ Policy Assistant.</FormTitle>
++        <Field label="6-digit code" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus />
+         <FormError message={state?.error} />
+         <Submit pending={pending}>Verify</Submit>
+       </form>
+-      <p className="text-xs text-gray-600">
++      <p className="text-xs text-muted">
+         Lost your authenticator? Account recovery is manual for now: contact the project owner (see the README).
+       </p>
+-      <SignOutButton />
++      <SignOutButton className="btn btn-ok w-full" />
+     </div>
+   );
+ }
+diff --git a/app/(auth)/sign-out-button.tsx b/app/(auth)/sign-out-button.tsx
+index 08adf52..1618d76 100644
+--- a/app/(auth)/sign-out-button.tsx
++++ b/app/(auth)/sign-out-button.tsx
+@@ -1,10 +1,11 @@
++import type { ReactNode } from 'react';
+ import { signOut } from './actions';
+ 
+-export function SignOutButton({ className }: { className?: string }) {
++export function SignOutButton({ className, children }: { className?: string; children?: ReactNode }) {
+   return (
+     <form action={signOut}>
+-      <button type="submit" className={className ?? 'text-sm text-gray-600 underline'}>
+-        Sign out
++      <button type="submit" className={className ?? 'text-sm text-muted underline'}>
++        {children ?? 'Sign out'}
+       </button>
+     </form>
+   );
+diff --git a/app/(auth)/signup/page.tsx b/app/(auth)/signup/page.tsx
+index 531c9ea..26a7309 100644
+--- a/app/(auth)/signup/page.tsx
++++ b/app/(auth)/signup/page.tsx
+@@ -4,19 +4,18 @@ import Link from 'next/link';
+ import { useActionState } from 'react';
+ import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
+ import { signUp } from '../actions';
+-import { Field, FormError, Submit } from '../ui';
++import { Field, FormError, FormTitle, Submit } from '../ui';
+ 
+ export default function SignUpPage() {
+   const [state, action, pending] = useActionState(signUp, undefined);
+   if (state?.done) {
+     return (
+       <div className="space-y-3">
+-        <h1 className="text-xl font-semibold">Check your email</h1>
+-        <p className="text-sm">
++        <FormTitle title="Check your email">
+           If this email can be used, we&apos;ve sent a link to confirm it. Open the link, then sign in and set up an
+-          authenticator app.
+-        </p>
+-        <Link href="/login" className="text-sm text-blue-700 underline">
++          authenticator app. If it isn&apos;t in your inbox, look in your spam folder.
++        </FormTitle>
++        <Link href="/login" className="btn btn-primary w-full">
+           Go to sign in
+         </Link>
+       </div>
+@@ -24,7 +23,7 @@ export default function SignUpPage() {
+   }
+   return (
+     <form action={action} className="space-y-4">
+-      <h1 className="text-xl font-semibold">Create an account</h1>
++      <FormTitle title="Create an account">For Kenya Airways passengers. It takes about two minutes.</FormTitle>
+       <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
+       <div>
+         <Field
+@@ -36,19 +35,19 @@ export default function SignUpPage() {
+           required
+           aria-describedby="password-rule"
+         />
+-        <p id="password-rule" className="mt-1 text-xs text-gray-600">
++        <p id="password-rule" className="mt-1 text-xs text-muted">
+           Use {PASSWORD_RULE}.
+         </p>
+       </div>
+       <Field label="Confirm password" name="confirm" type="password" autoComplete="new-password" required />
+-      <p className="text-xs text-gray-600">
++      <p className="text-xs text-muted">
+         You&apos;ll also need an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.
+       </p>
+       <label className="flex items-start gap-2 text-sm">
+-        <input type="checkbox" name="consent" required className="mt-1" />
++        <input type="checkbox" name="consent" required className="mt-1 accent-[#c8102e]" />
+         <span>
+           I have read the{' '}
+-          <Link href="/privacy" target="_blank" className="text-blue-700 underline">
++          <Link href="/privacy" target="_blank" className="link">
+             privacy notice
+           </Link>{' '}
+           and agree to my data being processed as it describes, including by OpenAI.
+@@ -56,9 +55,9 @@ export default function SignUpPage() {
+       </label>
+       <FormError message={state?.error} />
+       <Submit pending={pending}>Create account</Submit>
+-      <p className="text-sm">
++      <p className="text-center text-sm text-muted">
+         Already have an account?{' '}
+-        <Link href="/login" className="text-blue-700 underline">
++        <Link href="/login" className="link">
+           Sign in
+         </Link>
+       </p>
+diff --git a/app/(auth)/ui.tsx b/app/(auth)/ui.tsx
+index 574a133..747dabb 100644
+--- a/app/(auth)/ui.tsx
++++ b/app/(auth)/ui.tsx
+@@ -1,23 +1,19 @@
+ import type { ComponentProps, ReactNode } from 'react';
+ 
+-// Small shared pieces for the auth forms, so every form looks and reads the same.
++// Small shared pieces for the auth and settings forms, so every form looks and reads the same.
+ 
+ export function Field({ label, ...input }: { label: string } & ComponentProps<'input'>) {
+   return (
+     <label className="block text-sm">
+       <span className="font-medium">{label}</span>
+-      <input className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5" {...input} />
++      <input className="input mt-1.5" {...input} />
+     </label>
+   );
+ }
+ 
+ export function Submit({ pending, children }: { pending: boolean; children: ReactNode }) {
+   return (
+-    <button
+-      type="submit"
+-      disabled={pending}
+-      className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+-    >
++    <button type="submit" disabled={pending} className="btn btn-primary w-full">
+       {pending ? 'Please wait…' : children}
+     </button>
+   );
+@@ -26,8 +22,18 @@ export function Submit({ pending, children }: { pending: boolean; children: Reac
+ export function FormError({ message }: { message?: string | null }) {
+   if (!message) return null;
+   return (
+-    <p role="alert" className="rounded bg-red-100 px-3 py-2 text-sm text-red-800">
++    <p role="alert" className="notice notice-error">
+       {message}
+     </p>
+   );
+ }
++
++// The heading and short explanation at the top of each auth card.
++export function FormTitle({ title, children }: { title: string; children?: ReactNode }) {
++  return (
++    <div className="space-y-1">
++      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
++      {children && <p className="text-sm text-muted">{children}</p>}
++    </div>
++  );
++}
+diff --git a/app/(auth)/welcome/choose-password-form.tsx b/app/(auth)/welcome/choose-password-form.tsx
+index 209b745..7e7483f 100644
+--- a/app/(auth)/welcome/choose-password-form.tsx
++++ b/app/(auth)/welcome/choose-password-form.tsx
+@@ -3,14 +3,13 @@
+ import { useActionState } from 'react';
+ import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
+ import { choosePassword } from '../actions';
+-import { Field, FormError, Submit } from '../ui';
++import { Field, FormError, FormTitle, Submit } from '../ui';
+ 
+ export function ChoosePasswordForm() {
+   const [state, action, pending] = useActionState(choosePassword, undefined);
+   return (
+     <form action={action} className="space-y-4">
+-      <h1 className="text-xl font-semibold">Set up your agent account</h1>
+-      <p className="text-sm">Choose a password. Next you&apos;ll set up an authenticator app.</p>
++      <FormTitle title="Set up your agent account">Choose a password. Next you&apos;ll set up an authenticator app.</FormTitle>
+       <div>
+         <Field
+           label="Password"
+@@ -21,7 +20,7 @@ export function ChoosePasswordForm() {
+           required
+           aria-describedby="password-rule"
+         />
+-        <p id="password-rule" className="mt-1 text-xs text-gray-600">
++        <p id="password-rule" className="mt-1 text-xs text-muted">
+           Use {PASSWORD_RULE}.
+         </p>
+       </div>
+diff --git a/app/(chat)/admin/page.tsx b/app/(chat)/admin/page.tsx
+new file mode 100644
+index 0000000..2f10a6f
+--- /dev/null
++++ b/app/(chat)/admin/page.tsx
+@@ -0,0 +1,161 @@
++import type { Metadata } from 'next';
++import { notFound } from 'next/navigation';
++import type { ReactNode } from 'react';
++import { PageHeader } from '@/components/page-header';
++import { FEEDBACK_REASONS, type FeedbackReason } from '@/lib/chat/feedback';
++import { getInsights } from '@/lib/admin/insights';
++import { requireAal2 } from '@/lib/supabase/server';
++import { AnswerText } from '../answer-text';
++
++export const metadata: Metadata = { title: 'Insights · KQ Policy Assistant', robots: { index: false, follow: false } };
++
++const percent = (part: number, whole: number) => (whole === 0 ? '–' : `${Math.round((part / whole) * 100)}%`);
++const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
++const reasonLabel = (reason: string | null) =>
++  reason && Object.hasOwn(FEEDBACK_REASONS, reason) ? FEEDBACK_REASONS[reason as FeedbackReason] : 'No reason given';
++
++function Stat({ label, value, tone }: { label: string; value: string | number; tone?: 'brand' }) {
++  return (
++    <div className={`card p-4 ${tone === 'brand' ? 'card-brand' : 'card-ok'}`}>
++      <p className="text-sm text-muted">{label}</p>
++      <p className={`mt-1 text-3xl font-semibold tracking-tight ${tone === 'brand' ? 'text-brand' : ''}`}>{value}</p>
++    </div>
++  );
++}
++
++function Panel({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
++  return (
++    <section className="card p-5">
++      <h2 className="font-semibold">{title}</h2>
++      {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
++      <div className="mt-3">{children}</div>
++    </section>
++  );
++}
++
++// The administrator's insights dashboard (overview §7.13, US-21). Admins only: anyone else gets a
++// 404, and the database refuses them too. Each visit is written to the audit log by the database.
++// It shows no user emails or ids, and only monthly totals for anything older than 30 days.
++export default async function AdminPage() {
++  const { supabase, user } = await requireAal2();
++  if (user.app_metadata?.role !== 'admin') notFound();
++  const insights = await getInsights(supabase);
++  if (!insights) notFound();
++
++  const { daily, monthly, kinds, topics, gaps, feedback } = insights;
++  const answers = kinds.answer ?? 0;
++  const escalations = kinds.escalation ?? 0;
++  const refusals = kinds.refusal ?? 0;
++  const replies = answers + escalations + refusals;
++  const busiest = Math.max(1, ...daily.map((d) => d.questions));
++
++  return (
++    <div className="flex-1 overflow-y-auto">
++      <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6">
++      <PageHeader
++        title="Insights"
++        description="Last 30 days unless marked. Questions are shown as users typed them, with personal details masked. This visit is recorded in the audit log."
++      />
++
++      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Replies">
++        <Stat label="Questions" value={daily.reduce((n, d) => n + d.questions, 0)} />
++        <Stat label="Answered" value={percent(answers, replies)} />
++        <Stat label="Escalated" value={percent(escalations, replies)} tone="brand" />
++        <Stat label="Refused (off topic)" value={percent(refusals, replies)} />
++      </section>
++
++      <div className="grid gap-5 lg:grid-cols-2">
++      <Panel title="Questions per day">
++        {daily.length === 0 ? (
++          <p className="text-sm text-muted">No questions yet.</p>
++        ) : (
++          <ul className="space-y-1.5 text-sm">
++            {daily.map((d) => (
++              <li key={d.day} className="flex items-center gap-2">
++                <span className="w-16 shrink-0 text-muted">{shortDate(d.day)}</span>
++                {/* A native bar: inline styles are blocked by the Content-Security-Policy. */}
++                <progress className="h-2.5 flex-1 accent-[#15803d]" value={d.questions} max={busiest} aria-hidden="true" />
++                <span>{d.questions}</span>
++              </li>
++            ))}
++          </ul>
++        )}
++        {monthly.length > 0 && (
++          <>
++            <h3 className="mt-4 text-sm font-semibold">Earlier, per month</h3>
++            <ul className="text-sm text-muted">
++              {monthly.map((m) => (
++                <li key={m.month}>
++                  {m.month}: {m.questions}
++                </li>
++              ))}
++            </ul>
++          </>
++        )}
++      </Panel>
++
++      <Panel title="Knowledge gaps" description="Escalated questions, grouped when they share most of their words. Add policies for the top ones.">
++        {gaps.length === 0 ? (
++          <p className="text-sm text-muted">No escalations.</p>
++        ) : (
++          <ol className="space-y-2 text-sm">
++            {gaps.map((g) => (
++              <li key={g.example} className="flex items-start justify-between gap-3">
++                <span>{g.example}</span>
++                <span className="badge badge-brand shrink-0">{g.count}×</span>
++              </li>
++            ))}
++          </ol>
++        )}
++      </Panel>
++      </div>
++
++      <Panel title="Most-cited documents">
++        {topics.length === 0 ? (
++          <p className="text-sm text-muted">No answers yet.</p>
++        ) : (
++          <div className="overflow-x-auto">
++            <table className="w-full text-left text-sm">
++              <thead className="border-b border-line text-xs uppercase tracking-wider text-muted">
++                <tr>
++                  <th className="py-2 pr-3 font-semibold">Document</th>
++                  <th className="py-2 text-right font-semibold">Answers</th>
++                </tr>
++              </thead>
++              <tbody className="divide-y divide-line">
++                {topics.map((t) => (
++                  <tr key={t.title}>
++                    <td className="py-2 pr-3">{t.title}</td>
++                    <td className="py-2 text-right">
++                      <span className="badge badge-ok">{t.answers}</span>
++                    </td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </div>
++        )}
++      </Panel>
++
++      <Panel title="Feedback" description={`Helpful: ${percent(feedback.up, feedback.up + feedback.down)} of ${feedback.up + feedback.down} ratings.`}>
++        <h3 className="text-sm font-semibold">Latest thumbs-down</h3>
++        {feedback.latest_down.length === 0 ? (
++          <p className="text-sm text-muted">None.</p>
++        ) : (
++          <ul className="mt-2 space-y-3 text-sm">
++            {feedback.latest_down.map((f, i) => (
++              <li key={i} className="rounded-lg border border-line p-3">
++                <p className="text-xs text-muted">
++                  {shortDate(f.at)}: {reasonLabel(f.reason)}
++                </p>
++                {f.question && <p className="font-semibold">{f.question}</p>}
++                <AnswerText text={f.answer} />
++              </li>
++            ))}
++          </ul>
++        )}
++      </Panel>
++      </div>
++    </div>
++  );
++}
+diff --git a/app/(chat)/answer-actions.tsx b/app/(chat)/answer-actions.tsx
+index 591ab90..dc7096f 100644
+--- a/app/(chat)/answer-actions.tsx
++++ b/app/(chat)/answer-actions.tsx
+@@ -14,7 +14,7 @@ async function copy(text: string, done: (ok: boolean) => void) {
+   }
+ }
+ 
+-const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
++const button = 'btn btn-outline btn-sm';
+ 
+ // Copy an answer, and for passengers, share it as a read-only link that expires in 30 days.
+ export function AnswerActions({ text, sources, messageId, canShare }: { text: string; sources: Source[]; messageId?: string; canShare: boolean }) {
+@@ -45,7 +45,7 @@ export function AnswerActions({ text, sources, messageId, canShare }: { text: st
+   }
+ 
+   return (
+-    <div className="mt-2 text-xs">
++    <div className="mt-3 text-xs">
+       <div className="flex flex-wrap gap-2">
+         <button type="button" className={button} onClick={() => copy(answerWithSources(text, sources), setCopied)}>
+           {copied ? 'Copied' : 'Copy answer'}
+@@ -57,22 +57,22 @@ export function AnswerActions({ text, sources, messageId, canShare }: { text: st
+         )}
+       </div>
+       {link && !revoked && (
+-        <div className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
++        <div className="mt-2 rounded-lg border border-ok bg-ok-soft p-3 text-foreground">
+           <p>Anyone with this link can read this question and answer for 30 days. It doesn&apos;t show who you are.</p>
+-          <input readOnly value={link.url} aria-label="Share link" className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5" />
+-          <div className="mt-1 flex gap-2">
+-            <button type="button" className={button} onClick={() => copy(link.url, setLinkCopied)}>
++          <input readOnly value={link.url} aria-label="Share link" className="input mt-2 py-1 text-xs" />
++          <div className="mt-2 flex gap-2">
++            <button type="button" className="btn btn-primary btn-sm" onClick={() => copy(link.url, setLinkCopied)}>
+               {linkCopied ? 'Copied' : 'Copy link'}
+             </button>
+-            <button type="button" className={button} disabled={pending} onClick={revoke}>
++            <button type="button" className="btn btn-danger btn-sm" disabled={pending} onClick={revoke}>
+               Stop sharing
+             </button>
+           </div>
+         </div>
+       )}
+-      {revoked && <p className="mt-1 text-gray-600">The link no longer works.</p>}
++      {revoked && <p className="mt-1 text-muted">The link no longer works.</p>}
+       {error && (
+-        <p role="alert" className="mt-1 text-red-800">
++        <p role="alert" className="mt-1 text-brand">
+           {error}
+         </p>
+       )}
+diff --git a/app/(chat)/answer-text.tsx b/app/(chat)/answer-text.tsx
+index 88bb74e..6cbfccd 100644
+--- a/app/(chat)/answer-text.tsx
++++ b/app/(chat)/answer-text.tsx
+@@ -15,7 +15,7 @@ const components: Components = {
+   ol: ({ children }) => <ol className="my-1 list-decimal pl-5">{children}</ol>,
+   a: ({ href, children }) =>
+     href ? (
+-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
++      <a href={href} target="_blank" rel="noopener noreferrer" className="link">
+         {children}
+       </a>
+     ) : (
+@@ -26,8 +26,8 @@ const components: Components = {
+       <table className="border-collapse text-sm">{children}</table>
+     </div>
+   ),
+-  th: ({ children }) => <th className="border border-gray-400 bg-gray-100 px-2 py-1 text-left font-semibold">{children}</th>,
+-  td: ({ children }) => <td className="border border-gray-400 px-2 py-1 align-top">{children}</td>,
++  th: ({ children }) => <th className="border border-line bg-background px-2 py-1 text-left font-semibold">{children}</th>,
++  td: ({ children }) => <td className="border border-line px-2 py-1 align-top">{children}</td>,
+ };
+ 
+ export function AnswerText({ text }: { text: string }) {
+diff --git a/app/(chat)/chat.tsx b/app/(chat)/chat.tsx
+index b8add07..a34d602 100644
+--- a/app/(chat)/chat.tsx
++++ b/app/(chat)/chat.tsx
+@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
+ import Link from 'next/link';
+ import { useChat } from '@ai-sdk/react';
+ import { DefaultChatTransport } from 'ai';
++import { SendIcon } from '@/components/icons';
+ import { DISCLAIMER } from '@/lib/legal';
+ import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
+ import type { ChatMessage, Role, Source } from '@/lib/rag/types';
+@@ -36,9 +37,9 @@ const safeUrl = (url: string | null) => (url && url.startsWith('https://') ? url
+ function PassagePreview({ passages }: { passages: NonNullable<Source['passages']> }) {
+   return (
+     <details className="mt-1">
+-      <summary className="cursor-pointer text-blue-700">Show the exact wording</summary>
++      <summary className="cursor-pointer font-medium text-brand">Show the exact wording</summary>
+       {passages.map((p, i) => (
+-        <blockquote key={i} className="mt-1 whitespace-pre-line border-l-2 border-gray-300 pl-2 text-gray-800">
++        <blockquote key={i} className="mt-1 whitespace-pre-line border-l-2 border-ok pl-2 text-foreground">
+           {p.section && <span className="block font-semibold">{p.section}</span>}
+           {p.parts.map((part, j) =>
+             part.highlight ? (
+@@ -57,25 +58,27 @@ function PassagePreview({ passages }: { passages: NonNullable<Source['passages']
+ 
+ function SourceList({ sources, role }: { sources: Source[]; role: Role }) {
+   return (
+-    <div className="mt-2 border-t border-gray-300 pt-2 text-xs text-gray-700">
+-      <p className="font-semibold">Sources</p>
+-      <ul className="mt-1 space-y-1">
++    <div className="mt-3 rounded-lg border border-line bg-background/60 p-3 text-xs text-muted">
++      <p className="flex items-center gap-2 font-semibold text-foreground">
++        Sources <span className="badge badge-ok">{sources.length}</span>
++      </p>
++      <ul className="mt-2 space-y-2">
+         {sources.map((s, i) => {
+           const label = s.section ? `${s.title}: ${s.section}` : s.title;
+           const url = safeUrl(s.url);
+           return (
+             <li key={i}>
+               {url ? (
+-                <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
++                <a href={url} target="_blank" rel="noopener noreferrer" className="link">
+                   {label}
+                 </a>
+               ) : (
+-                <span>{label}</span>
++                <span className="font-medium text-foreground">{label}</span>
+               )}
+-              {s.audience === 'staff' && <span className="ml-1 font-semibold">(Internal)</span>}
+-              {s.audience === 'staff' && s.illustrative && <span className="ml-1 italic">Sample procedure</span>}
+-              {role === 'agent' && s.audience === 'public' && <span className="ml-1 font-semibold">(Public)</span>}
+-              {s.retrievedAt && <span className="ml-1 text-gray-500">checked {checkedOn(s.retrievedAt)}</span>}
++              {s.audience === 'staff' && <span className="badge badge-brand ml-1.5">Internal</span>}
++              {s.audience === 'staff' && s.illustrative && <span className="badge badge-muted ml-1">Sample procedure</span>}
++              {role === 'agent' && s.audience === 'public' && <span className="badge badge-ok ml-1.5">Public</span>}
++              {s.retrievedAt && <span className="ml-1.5">checked {checkedOn(s.retrievedAt)}</span>}
+               {isStale(s.retrievedAt) && (
+                 <p className="text-amber-800">
+                   This was checked more than {STALE_AFTER_MONTHS} months ago. Please confirm on the KQ website.
+@@ -113,17 +116,17 @@ function CopyButton({ text, className }: { text: string; className: string }) {
+ function CustomerWording({ text }: { text: string | null }) {
+   if (text === null) {
+     return (
+-      <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
++      <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+         <p className="font-semibold">Customer-ready wording</p>
+         <p>None for this answer: no public policy covers it. Don&apos;t read the internal steps to the caller.</p>
+       </div>
+     );
+   }
+   return (
+-    <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-black">
++    <div className="mt-3 rounded-lg border border-ok bg-ok-soft p-3 text-sm text-foreground">
+       <div className="flex items-center justify-between gap-2">
+-        <p className="text-xs font-semibold">Customer-ready wording (public policy only)</p>
+-        <CopyButton text={text} className="rounded border border-green-400 bg-surface px-2 py-0.5 text-xs" />
++        <p className="text-xs font-semibold text-ok">Customer-ready wording (public policy only)</p>
++        <CopyButton text={text} className="btn btn-ok btn-sm" />
+       </div>
+       <p className="mt-1">{text}</p>
+     </div>
+@@ -133,10 +136,10 @@ function CustomerWording({ text }: { text: string | null }) {
+ // Overview §7.11: the passenger's question, ready to paste into the KQ contact form.
+ function EscalationSummary({ text }: { text: string }) {
+   return (
+-    <div className="mt-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm text-black">
++    <div className="mt-3 rounded-lg border border-brand bg-brand-soft p-3 text-sm text-foreground">
+       <div className="flex items-center justify-between gap-2">
+-        <p className="text-xs font-semibold">Your question, ready to send to Kenya Airways</p>
+-        <CopyButton text={text} className="rounded border border-blue-400 bg-surface px-2 py-0.5 text-xs" />
++        <p className="text-xs font-semibold text-brand">Your question, ready to send to Kenya Airways</p>
++        <CopyButton text={text} className="btn btn-danger btn-sm" />
+       </div>
+       <p className="mt-1">{text}</p>
+     </div>
+@@ -177,23 +180,29 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+ 
+   return (
+     <div className="flex min-h-0 flex-1 flex-col">
+-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
+-        {messages.length === 0 && role === 'customer' && (
+-          <p className="mx-auto max-w-md text-center text-sm text-gray-500">
+-            Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance.
+-          </p>
++      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6">
++        {messages.length === 0 && (
++          <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
++            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
++              {role === 'agent' ? 'What is the caller asking about?' : 'How can I help with your trip?'}
++            </h1>
++            <p className="mt-2 text-sm text-muted">
++              {role === 'agent'
++                ? "Describe the caller's situation, or start with a common call. Answers use public policies and internal procedures."
++                : 'Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
++            </p>
++          </div>
+         )}
+         {messages.length === 0 && role === 'agent' && (
+-          <div className="mx-auto max-w-md text-center text-sm text-gray-600">
+-            <p>Describe the caller&apos;s situation, or start with a common call:</p>
+-            <div className="mt-3 flex flex-wrap justify-center gap-2">
++          <div className="mx-auto max-w-xl text-center text-sm">
++            <div className="flex flex-wrap justify-center gap-2">
+               {AGENT_QUICK_STARTS.map((q) => (
+                 <button
+                   key={q.label}
+                   type="button"
+                   disabled={busy}
+                   onClick={() => sendMessage({ text: q.question })}
+-                  className="rounded-full border border-gray-300 bg-surface px-3 py-1 text-black hover:bg-gray-100"
++                  className="chip"
+                 >
+                   {q.label}
+                 </button>
+@@ -202,12 +211,17 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+           </div>
+         )}
+         {messages.map((m, index) => (
+-          <div key={m.id} className={`mx-auto flex max-w-2xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
++          <div key={m.id} className={`mx-auto flex max-w-3xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+             <div
+-              className={`rounded-lg px-4 py-2 max-w-[80%] ${
+-                m.role === 'user' ? 'whitespace-pre-wrap bg-blue-500 text-white' : 'bg-gray-200 text-black'
+-              }`}
++              className={
++                m.role === 'user'
++                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white'
++                  : 'card w-full max-w-[95%] rounded-tl-md px-4 py-3'
++              }
+             >
++              {m.role === 'assistant' && (
++                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Policy Assistant</p>
++              )}
+               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
+               {m.role === 'user' ? (
+                 m.parts.map((part, i) => (part.type === 'text' ? <span key={i}>{part.text}</span> : null))
+@@ -215,7 +229,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+                 <AnswerText text={answerText(m)} />
+               )}
+               {m.metadata?.piiMasked && (
+-                <p className="mt-2 text-xs text-amber-800">
++                <p className={`mt-2 text-xs ${m.role === 'user' ? 'text-white/90' : 'text-amber-800'}`}>
+                   We hid what looked like personal details in your message before processing it.
+                 </p>
+               )}
+@@ -235,24 +249,39 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+               {m.role === 'assistant' && m.metadata?.messageId && <Feedback messageId={m.metadata.messageId} initial={m.metadata.rating} />}
+               {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
+               {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
+-                <div className="mt-2 flex flex-wrap gap-2 border-t border-gray-300 pt-2">
++                <div className="mt-3 border-t border-line pt-3">
++                  <p className="mb-2 text-xs font-semibold text-muted">You could also ask</p>
++                  <div className="flex flex-wrap gap-2">
+                   {m.metadata!.followUps!.map((q) => (
+                     <button
+                       key={q}
+                       type="button"
+                       onClick={() => sendMessage({ text: q })}
+-                      className="rounded-full border border-blue-300 bg-surface px-3 py-1 text-left text-sm text-blue-800 hover:bg-blue-50"
++                      className="chip"
+                     >
+                       {q}
+                     </button>
+                   ))}
++                  </div>
+                 </div>
+               )}
+             </div>
+           </div>
+         ))}
++        {busy && messages.at(-1)?.role === 'user' && (
++          <div className="mx-auto flex max-w-3xl" role="status">
++            <div className="card flex items-center gap-2 px-4 py-3 text-sm text-muted">
++              <span className="flex gap-1" aria-hidden="true">
++                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e]" />
++                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
++                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
++              </span>
++              Checking the policies…
++            </div>
++          </div>
++        )}
+         {error && (
+-          <div role="alert" className="mx-auto max-w-2xl rounded-lg px-4 py-2 bg-red-100 text-red-800">
++          <div role="alert" className="notice notice-error mx-auto max-w-3xl">
+             {errorText(error)}
+           </div>
+         )}
+@@ -264,22 +293,25 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
+           sendMessage({ text: input });
+           setInput('');
+         }}
+-        className="mx-auto mb-4 w-full max-w-2xl rounded border border-gray-300 bg-surface p-2 shadow-xl"
++        className="mx-auto w-full max-w-3xl px-4 pb-4"
+       >
+-        <input
+-          className="w-full p-2 text-black"
+-          value={input}
+-          maxLength={1000}
+-          aria-label="Your question"
+-          placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
+-          onChange={(e) => setInput(e.target.value)}
+-          disabled={busy}
+-        />
+-        <p className="px-2 text-xs text-gray-500">
+-          Please don&apos;t share booking references, passport, card or medical details.
+-        </p>
+-        <p className="px-2 text-xs text-gray-500">
+-          {DISCLAIMER}{' '}
++        <div className="card flex items-center gap-2 p-2 shadow-lg focus-within:ring-2 focus-within:ring-[#c8102e]">
++          <input
++            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-foreground outline-none"
++            value={input}
++            maxLength={1000}
++            aria-label="Your question"
++            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
++            onChange={(e) => setInput(e.target.value)}
++            disabled={busy}
++          />
++          <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary" aria-label="Send">
++            <SendIcon />
++            <span className="hidden sm:inline">Send</span>
++          </button>
++        </div>
++        <p className="mt-2 px-1 text-center text-xs text-muted">
++          Please don&apos;t share booking references, passport, card or medical details. {DISCLAIMER}{' '}
+           <Link href="/privacy" className="underline">
+             Privacy
+           </Link>
+diff --git a/app/(chat)/checklist/trip-checklist.tsx b/app/(chat)/checklist/trip-checklist.tsx
+index 0186681..e71ac73 100644
+--- a/app/(chat)/checklist/trip-checklist.tsx
++++ b/app/(chat)/checklist/trip-checklist.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import { useState } from 'react';
++import { PageHeader } from '@/components/page-header';
+ import { DISCLAIMER } from '@/lib/legal';
+ import type { ChecklistSection } from '@/lib/rag/checklist';
+ import type { ContactDetails } from '@/lib/rag/prompts';
+@@ -41,36 +42,55 @@ export function TripChecklist() {
+   }
+ 
+   return (
+-    <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto px-4 py-6 print:overflow-visible">
+-      <h1 className="text-2xl font-semibold">Pre-travel checklist</h1>
++    <div className="mx-auto w-full max-w-3xl flex-1 space-y-5 overflow-y-auto px-4 py-6 print:overflow-visible">
++      <PageHeader
++        title="Pre-travel checklist"
++        description="Tell us about your trip and get one checklist from Kenya Airways policies, with the source of every item."
++      />
+       <form
+-        className="space-y-2 print:hidden"
++        className="card card-brand space-y-3 p-4 print:hidden"
+         onSubmit={(e) => {
+           e.preventDefault();
+           if (trip.trim() && !busy) build();
+         }}
+       >
+-        <label htmlFor="trip" className="block text-sm">
++        <label htmlFor="trip" className="block text-sm font-medium">
+           Describe your trip in one message, for example: &ldquo;I&apos;m flying Nairobi to Dubai with my cat and I need a
+           wheelchair.&rdquo;
+         </label>
+         <textarea
+           id="trip"
+-          className="w-full rounded border border-gray-300 bg-surface p-2"
++          className="input"
+           rows={3}
+           maxLength={1000}
+           value={trip}
+           onChange={(e) => setTrip(e.target.value)}
+           disabled={busy}
+         />
+-        <p className="text-xs text-gray-500">Please don&apos;t share booking references, passport, card or medical details.</p>
+-        <button type="submit" disabled={busy || !trip.trim()} className="rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+-          {busy ? 'Building your checklist…' : 'Build my checklist'}
+-        </button>
++        <div className="flex flex-wrap items-center justify-between gap-2">
++          <p className="text-xs text-muted">Please don&apos;t share booking references, passport, card or medical details.</p>
++          <div className="flex gap-2">
++            <button
++              type="button"
++              className="btn btn-ok"
++              disabled={busy || !trip}
++              onClick={() => {
++                setTrip('');
++                setResult(null);
++                setError(null);
++              }}
++            >
++              Clear
++            </button>
++            <button type="submit" disabled={busy || !trip.trim()} className="btn btn-primary">
++              {busy ? 'Building your checklist…' : 'Build my checklist'}
++            </button>
++          </div>
++        </div>
+       </form>
+ 
+       {error && (
+-        <p role="alert" className="rounded bg-red-100 px-3 py-2 text-red-800">
++        <p role="alert" className="notice notice-error">
+           {error}
+         </p>
+       )}
+@@ -78,35 +98,35 @@ export function TripChecklist() {
+         <p className="text-xs text-amber-800 print:hidden">We hid what looked like personal details in your message before processing it.</p>
+       )}
+       {result?.kind === 'refusal' && (
+-        <p>I can only build a checklist for a trip with Kenya Airways. Please describe where you are flying and anything special about your trip.</p>
++        <p className="card p-4">I can only build a checklist for a trip with Kenya Airways. Please describe where you are flying and anything special about your trip.</p>
+       )}
+       {result?.kind === 'checklist' && (
+         <section aria-label="Your checklist" className="space-y-4">
+           <div className="flex items-center justify-between gap-2">
+-            <p className="text-sm text-gray-600">Built on {today()} from Kenya Airways policies.</p>
+-            <button type="button" onClick={() => window.print()} className="rounded border border-gray-400 bg-surface px-3 py-1 text-sm print:hidden">
++            <p className="text-sm text-muted">Built on {today()} from Kenya Airways policies.</p>
++            <button type="button" onClick={() => window.print()} className="btn btn-outline print:hidden">
+               Save as PDF
+             </button>
+           </div>
+           {result.sections.map((s) => (
+-            <div key={s.topic} className="break-inside-avoid rounded border border-gray-300 p-3">
++            <div key={s.topic} className="card card-ok break-inside-avoid p-4">
+               <h2 className="font-semibold">{s.topic}</h2>
+-              <ul className="mt-1 space-y-1">
++              <ul className="mt-2 space-y-1.5">
+                 {s.items.map((item) => (
+                   <li key={item} className="flex gap-2">
+-                    <span aria-hidden="true">☐</span>
++                    <span aria-hidden="true" className="text-ok">☐</span>
+                     <span>{item}</span>
+                   </li>
+                 ))}
+               </ul>
+-              <p className="mt-2 text-xs font-semibold text-gray-700">Sources</p>
+-              <ul className="text-xs text-gray-700">
++              <p className="mt-3 text-xs font-semibold text-muted">Sources</p>
++              <ul className="text-xs text-muted">
+                 {s.sources.map((src) => {
+                   const label = src.section ? `${src.title}: ${src.section}` : src.title;
+                   return (
+                     <li key={label}>
+                       {src.url?.startsWith('https://') ? (
+-                        <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
++                        <a href={src.url} target="_blank" rel="noopener noreferrer" className="link">
+                           {label}
+                         </a>
+                       ) : (
+@@ -121,7 +141,7 @@ export function TripChecklist() {
+             </div>
+           ))}
+           {result.uncovered.length > 0 && (
+-            <div className="break-inside-avoid rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
++            <div className="break-inside-avoid rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+               <h2 className="font-semibold">Check these with Kenya Airways</h2>
+               <p className="text-sm">I don&apos;t have these in my knowledge base:</p>
+               <ul className="ml-5 list-disc text-sm">
+@@ -137,7 +157,7 @@ export function TripChecklist() {
+               )}
+             </div>
+           )}
+-          <p className="text-xs text-gray-500">{DISCLAIMER}</p>
++          <p className="text-xs text-muted">{DISCLAIMER}</p>
+         </section>
+       )}
+     </div>
+diff --git a/app/(chat)/conversation-list.tsx b/app/(chat)/conversation-list.tsx
+index 34f1acb..e968fda 100644
+--- a/app/(chat)/conversation-list.tsx
++++ b/app/(chat)/conversation-list.tsx
+@@ -3,6 +3,7 @@
+ import Link from 'next/link';
+ import { usePathname, useRouter } from 'next/navigation';
+ import { useState, useTransition } from 'react';
++import { SearchIcon } from '@/components/icons';
+ import type { ConversationSummary } from '@/lib/chat/history';
+ import { TITLE_MAX } from '@/lib/chat/history';
+ import { deleteConversationAction, renameConversationAction, searchConversationsAction } from './actions';
+@@ -47,34 +48,34 @@ export function ConversationList({ conversations }: { conversations: Conversatio
+       >
+         <input
+           type="search"
+-          className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-2 py-1 text-sm"
++          className="sidebar-input flex-1"
+           value={query}
+           maxLength={100}
+           aria-label="Search your conversations"
+           placeholder="Search conversations"
+           onChange={(e) => (e.target.value ? setQuery(e.target.value) : clear())}
+         />
+-        <button type="submit" disabled={pending} className="text-xs text-blue-700 underline">
+-          Search
++        <button type="submit" disabled={pending} className="btn btn-primary btn-sm px-2" aria-label="Search">
++          <SearchIcon />
+         </button>
+       </form>
+       {error && (
+-        <p role="alert" className="text-xs text-red-700">
++        <p role="alert" className="text-xs text-[#ff7385]">
+           {error}
+         </p>
+       )}
+       {results && (
+-        <p className="text-xs text-gray-600">
++        <p className="px-1 text-xs text-zinc-400">
+           {results.length === 0 ? 'No conversations match.' : `${results.length} found.`}{' '}
+-          <button type="button" onClick={clear} className="underline">
++          <button type="button" onClick={clear} className="text-white underline">
+             Show all
+           </button>
+         </p>
+       )}
+       {!results && conversations.length === 0 ? (
+-        <p className="text-sm text-gray-500">No conversations yet.</p>
++        <p className="px-1 text-sm text-zinc-500">No conversations yet. Your questions will appear here.</p>
+       ) : (
+-        <ul className="space-y-1">
++        <ul className="space-y-0.5">
+           {shown.map((c) => (
+             <ConversationItem key={c.id} conversation={c} />
+           ))}
+@@ -110,7 +111,7 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary
+   };
+ 
+   return (
+-    <li className={`rounded px-2 py-1 text-sm ${current ? 'bg-blue-100' : ''}`}>
++    <li className={`group rounded-lg px-2 py-1.5 text-sm ${current ? 'bg-[#1f1f24] ring-1 ring-[#c8102e]' : 'hover:bg-[#1f1f24]'}`}>
+       {editing ? (
+         <form
+           onSubmit={(e) => {
+@@ -120,14 +121,14 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary
+           className="flex gap-1"
+         >
+           <input
+-            className="min-w-0 flex-1 rounded border border-gray-300 bg-surface px-1"
++            className="sidebar-input flex-1"
+             value={title}
+             maxLength={TITLE_MAX}
+             aria-label="Conversation title"
+             onChange={(e) => setTitle(e.target.value)}
+             autoFocus
+           />
+-          <button type="submit" disabled={pending} className="text-xs text-blue-700 underline">
++          <button type="submit" disabled={pending} className="text-xs font-semibold text-white underline">
+             Save
+           </button>
+           <button
+@@ -137,27 +138,33 @@ function ConversationItem({ conversation }: { conversation: ConversationSummary
+               setTitle(conversation.title);
+               setError(null);
+             }}
+-            className="text-xs text-gray-600 underline"
++            className="text-xs text-zinc-400 underline"
+           >
+             Cancel
+           </button>
+         </form>
+       ) : (
+-        <div className="flex items-start gap-1">
+-          <Link href={href} className="min-w-0 flex-1" aria-current={current ? 'page' : undefined}>
+-            <span className="block truncate">{conversation.title}</span>
+-            <span className="block text-xs text-gray-500">{shortDate(conversation.updatedAt)}</span>
++        <>
++          <Link href={href} className="block" aria-current={current ? 'page' : undefined}>
++            <span className={`block truncate ${current ? 'text-white' : 'text-zinc-200'}`}>{conversation.title}</span>
+           </Link>
+-          <button type="button" onClick={() => setEditing(true)} disabled={pending} className="text-xs text-gray-600 underline">
+-            Rename
+-          </button>
+-          <button type="button" onClick={remove} disabled={pending} className="text-xs text-red-700 underline">
+-            Delete
+-          </button>
+-        </div>
++          {/* The date shares a row with Rename and Delete, so long titles keep the full width. The buttons show on hover or
++              keyboard focus, so the list stays calm; they are always shown on touch screens. */}
++          <div className="flex items-center justify-between gap-2">
++            <span className="text-xs text-zinc-500">{shortDate(conversation.updatedAt)}</span>
++            <span className="flex gap-2 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
++              <button type="button" onClick={() => setEditing(true)} disabled={pending} className="text-xs text-zinc-400 hover:text-white">
++                Rename
++              </button>
++              <button type="button" onClick={remove} disabled={pending} className="text-xs text-[#ff7385] hover:text-white">
++                Delete
++              </button>
++            </span>
++          </div>
++        </>
+       )}
+       {error && (
+-        <p role="alert" className="text-xs text-red-700">
++        <p role="alert" className="text-xs text-[#ff7385]">
+           {error}
+         </p>
+       )}
+diff --git a/app/(chat)/feedback.tsx b/app/(chat)/feedback.tsx
+index 3c007d8..a67dceb 100644
+--- a/app/(chat)/feedback.tsx
++++ b/app/(chat)/feedback.tsx
+@@ -28,14 +28,16 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?:
+   }
+ 
+   if (rating) {
+-    return <p className="mt-2 text-xs text-gray-600">{rating === 'up' ? 'You found this helpful.' : 'Thanks, we will use this to improve.'}</p>;
++    return (
++      <p className="mt-2 text-xs text-ok">{rating === 'up' ? '✓ You found this helpful.' : '✓ Thanks, we will use this to improve.'}</p>
++    );
+   }
+ 
+-  const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
++  const button = 'btn btn-outline btn-sm';
+   return (
+     <div className="mt-2 text-xs">
+       <div className="flex items-center gap-2">
+-        <span className="text-gray-600">Was this helpful?</span>
++        <span className="text-muted">Was this helpful?</span>
+         <button type="button" className={button} disabled={pending} aria-label="Helpful" onClick={() => send('up', null)}>
+           👍
+         </button>
+@@ -51,8 +53,8 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?:
+         </button>
+       </div>
+       {choosing && (
+-        <fieldset className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
+-          <legend className="px-1 text-gray-600">What went wrong? (optional)</legend>
++        <fieldset className="mt-2 rounded-lg border border-line bg-surface p-3 text-foreground">
++          <legend className="px-1 text-muted">What went wrong? (optional)</legend>
+           <div className="flex flex-wrap gap-2">
+             {(Object.keys(FEEDBACK_REASONS) as FeedbackReason[]).map((key) => (
+               <button
+@@ -60,24 +62,24 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?:
+                 type="button"
+                 aria-pressed={reason === key}
+                 onClick={() => setReason(reason === key ? null : key)}
+-                className={`rounded-full border px-2 py-0.5 ${reason === key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-surface'}`}
++                className="chip text-xs"
+               >
+                 {FEEDBACK_REASONS[key]}
+               </button>
+             ))}
+           </div>
+           <div className="mt-2 flex gap-2">
+-            <button type="button" className={button} disabled={pending} onClick={() => send('down', reason)}>
++            <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={() => send('down', reason)}>
+               Send
+             </button>
+-            <button type="button" className={button} disabled={pending} onClick={() => setChoosing(false)}>
++            <button type="button" className="btn btn-ok btn-sm" disabled={pending} onClick={() => setChoosing(false)}>
+               Cancel
+             </button>
+           </div>
+         </fieldset>
+       )}
+       {error && (
+-        <p role="alert" className="mt-1 text-red-800">
++        <p role="alert" className="mt-1 text-brand">
+           {error}
+         </p>
+       )}
+diff --git a/app/(chat)/layout.tsx b/app/(chat)/layout.tsx
+index e3603fe..2e764b7 100644
+--- a/app/(chat)/layout.tsx
++++ b/app/(chat)/layout.tsx
+@@ -1,57 +1,39 @@
+-import Link from 'next/link';
++import { MenuIcon } from '@/components/icons';
++import { Brand } from '@/components/brand';
+ import { listConversations } from '@/lib/chat/history';
+ import { requireAal2 } from '@/lib/supabase/server';
+-import { ConversationList } from './conversation-list';
++import { Sidebar } from './sidebar';
+ 
+-// The signed-in area: the history sidebar (overview §7.2, US-10) next to the chat.
+-// On small screens the sidebar folds into a "Conversations" toggle above the chat.
++// The signed-in area: the dark sidebar (navigation and history, overview §7.2, US-10) next to the
++// page. On small screens the sidebar folds into a menu under a top bar.
+ export default async function ChatLayout({ children }: LayoutProps<'/'>) {
+   const { supabase, user, role } = await requireAal2();
+   const conversations = await listConversations(supabase);
+-
+   const sidebar = (
+-    <nav aria-label="Conversations" className="flex flex-col gap-3">
+-      <Link href="/" prefetch={false} className="rounded bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white">
+-        New chat
+-      </Link>
+-      {role === 'customer' && (
+-        <Link href="/checklist" prefetch={false} className="rounded border border-blue-600 px-3 py-2 text-center text-sm font-semibold text-blue-700">
+-          Pre-travel checklist
+-        </Link>
+-      )}
+-      <ConversationList conversations={conversations} />
+-      <div className="mt-auto border-t border-gray-300 pt-3 text-xs text-gray-600">
+-        <p className="truncate" title={user.email}>
+-          {user.email}
+-          {role === 'agent' && <span className="ml-1 font-semibold">(agent)</span>}
+-        </p>
+-        <Link href="/settings" className="text-blue-700 underline">
+-          Settings
+-        </Link>
+-        {user.app_metadata?.role === 'admin' && (
+-          <Link href="/admin" className="ml-3 text-blue-700 underline">
+-            Insights
+-          </Link>
+-        )}
+-      </div>
+-    </nav>
++    <Sidebar conversations={conversations} email={user.email ?? ''} role={role} isAdmin={user.app_metadata?.role === 'admin'} />
+   );
+ 
+   return (
+     <div className="flex h-dvh flex-col md:flex-row print:block print:h-auto">
+-      <aside className="hidden print:hidden w-72 shrink-0 flex-col overflow-y-auto border-r border-gray-300 bg-gray-50 p-3 text-black md:flex">
+-        {sidebar}
+-      </aside>
+-      <details className="border-b border-gray-300 bg-gray-50 p-3 text-black md:hidden print:hidden">
+-        <summary className="cursor-pointer text-sm font-semibold">Conversations</summary>
+-        <div className="mt-3">{sidebar}</div>
++      <aside className="sidebar hidden w-72 shrink-0 p-4 md:block print:hidden">{sidebar}</aside>
++      <details className="sidebar group md:hidden print:hidden">
++        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 [&::-webkit-details-marker]:hidden">
++          <Brand />
++          <span className="nav-link px-2" aria-hidden="true">
++            <MenuIcon />
++          </span>
++          <span className="sr-only">Menu</span>
++        </summary>
++        <div className="max-h-[75dvh] overflow-y-auto px-4 pb-4">{sidebar}</div>
+       </details>
+       <main className="flex min-h-0 flex-1 flex-col print:block">
+         {role === 'agent' && (
+           // Overview §7.14: always clear which rules apply. Agents can't switch to customer mode.
+-          <div role="note" className="print:hidden border-b border-amber-300 bg-amber-100 px-4 py-2 text-sm text-amber-950">
+-            <strong>Agent mode.</strong> Answers include internal procedures marked <em>Internal</em>. Read callers only
+-            the <em>Customer-ready wording</em>.
++          <div role="note" className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 print:hidden">
++            <span className="badge badge-solid">Agent mode</span>
++            <span>
++              Answers include internal procedures marked <em>Internal</em>. Read callers only the <em>Customer-ready wording</em>.
++            </span>
+           </div>
+         )}
+         {children}
+diff --git a/app/settings/actions.ts b/app/(chat)/settings/actions.ts
+similarity index 100%
+rename from app/settings/actions.ts
+rename to app/(chat)/settings/actions.ts
+diff --git a/app/settings/appearance.tsx b/app/(chat)/settings/appearance.tsx
+similarity index 93%
+rename from app/settings/appearance.tsx
+rename to app/(chat)/settings/appearance.tsx
+index 1004d87..edda495 100644
+--- a/app/settings/appearance.tsx
++++ b/app/(chat)/settings/appearance.tsx
+@@ -22,7 +22,7 @@ export function AppearanceSettings({ initial }: { initial: Appearance }) {
+     });
+   };
+ 
+-  const select = 'rounded border border-gray-400 bg-surface px-2 py-1 text-sm';
++  const select = 'input w-auto py-1.5';
+   return (
+     <div className="space-y-2 text-sm">
+       <label className="flex items-center justify-between gap-2">
+@@ -45,7 +45,7 @@ export function AppearanceSettings({ initial }: { initial: Appearance }) {
+           ))}
+         </select>
+       </label>
+-      <p role="status" className="text-xs text-gray-600">
++      <p role="status" className="text-xs text-ok">
+         {message}
+       </p>
+     </div>
+diff --git a/app/settings/delete-account.tsx b/app/(chat)/settings/delete-account.tsx
+similarity index 87%
+rename from app/settings/delete-account.tsx
+rename to app/(chat)/settings/delete-account.tsx
+index cc5fd8c..d823f16 100644
+--- a/app/settings/delete-account.tsx
++++ b/app/(chat)/settings/delete-account.tsx
+@@ -1,21 +1,21 @@
+ 'use client';
+ 
+ import { useActionState } from 'react';
+-import { FormError, Field, Submit } from '../(auth)/ui';
++import { FormError, Field, Submit } from '../../(auth)/ui';
+ import { deleteAccount } from './actions';
+ 
+ // Overview §11: deletes the account and every conversation in it, after a fresh authenticator code.
+ export function DeleteAccount() {
+   const [state, action, pending] = useActionState(deleteAccount, undefined);
+   return (
+-    <form action={action} className="space-y-2 rounded border border-red-300 p-3">
++    <form action={action} className="space-y-3">
+       <p className="text-sm">
+         Deletes your account and all your conversations straight away. This can&apos;t be undone. A record that an account
+         was deleted is kept for 12 months, without your email address.
+       </p>
+       <Field label="Code from your authenticator app" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+       <label className="flex items-start gap-2 text-sm">
+-        <input type="checkbox" name="confirm" required className="mt-1" />
++        <input type="checkbox" name="confirm" required className="mt-1 accent-[#c8102e]" />
+         <span>I understand my account and conversations will be deleted permanently.</span>
+       </label>
+       <FormError message={state?.error} />
+diff --git a/app/(chat)/settings/page.tsx b/app/(chat)/settings/page.tsx
+new file mode 100644
+index 0000000..56f7705
+--- /dev/null
++++ b/app/(chat)/settings/page.tsx
+@@ -0,0 +1,105 @@
++import type { Metadata } from 'next';
++import Link from 'next/link';
++import type { ReactNode } from 'react';
++import { PageHeader } from '@/components/page-header';
++import { appearanceFrom } from '@/lib/appearance';
++import { listShares } from '@/lib/chat/shares';
++import { requireAal2 } from '@/lib/supabase/server';
++import { SignOutButton } from '../../(auth)/sign-out-button';
++import { AppearanceSettings } from './appearance';
++import { DeleteAccount } from './delete-account';
++import { ReplaceAuthenticator } from './replace-authenticator';
++import { SharedLinks } from './shared-links';
++
++export const metadata: Metadata = { title: 'Settings · KQ Policy Assistant' };
++
++const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
++
++function Section({ title, description, tone, children }: { title: string; description?: ReactNode; tone?: 'danger'; children: ReactNode }) {
++  return (
++    <section className={`card space-y-3 p-5 ${tone === 'danger' ? 'border-brand' : ''}`}>
++      <div>
++        <h2 className={`text-base font-semibold ${tone === 'danger' ? 'text-brand' : ''}`}>{title}</h2>
++        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
++      </div>
++      {children}
++    </section>
++  );
++}
++
++// Account and security settings (overview §7.4), and account deletion (§11).
++export default async function SettingsPage() {
++  const { supabase, user, role } = await requireAal2();
++  const shares = role === 'agent' ? [] : await listShares(supabase);
++  const authenticators = (user.factors ?? []).filter((f) => f.factor_type === 'totp' && f.status === 'verified');
++
++  return (
++    <div className="flex-1 overflow-y-auto">
++      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6">
++        <PageHeader title="Settings" description="Your account, display and sign-in security." />
++
++        <div className="grid gap-5 md:grid-cols-2">
++          <Section title="Account">
++            <dl className="space-y-2 text-sm">
++              <div>
++                <dt className="text-muted">Email</dt>
++                <dd className="break-all font-medium">{user.email}</dd>
++              </div>
++              <div>
++                <dt className="text-muted">Account type</dt>
++                <dd>
++                  <span className={`badge ${role === 'agent' ? 'badge-solid' : 'badge-ok'}`}>
++                    {role === 'agent' ? 'Call-centre agent' : 'Passenger'}
++                  </span>
++                </dd>
++              </div>
++            </dl>
++            <SignOutButton className="btn btn-ok w-full">Sign out of this browser</SignOutButton>
++          </Section>
++
++          <Section title="Display" description="Saved with your account, on every device.">
++            <AppearanceSettings initial={appearanceFrom(user.user_metadata)} />
++          </Section>
++        </div>
++
++        <Section
++          title="Two-step sign-in"
++          description={
++            <>
++              <span className="badge badge-ok mr-1">On</span> It can&apos;t be turned off. You sign in with your password and a code
++              from{' '}
++              {authenticators.map((f) => `${f.friendly_name ?? 'your authenticator app'}, added ${longDate(f.created_at)}`).join('; ')}.
++            </>
++          }
++        >
++          <ReplaceAuthenticator />
++        </Section>
++
++        {role !== 'agent' && (
++          <Section
++            title="Shared answers"
++            description="Links you shared stop working after 30 days, or straight away when you stop sharing them."
++          >
++            <SharedLinks shares={shares} />
++          </Section>
++        )}
++
++        <Section
++          title="Delete my account"
++          tone="danger"
++          description={
++            <>
++              See the{' '}
++              <Link href="/privacy" className="link">
++                privacy notice
++              </Link>{' '}
++              for what we keep and for how long.
++            </>
++          }
++        >
++          {role === 'agent' ? <p className="text-sm">Agent accounts are removed by your administrator.</p> : <DeleteAccount />}
++        </Section>
++      </div>
++    </div>
++  );
++}
+diff --git a/app/settings/replace-authenticator.tsx b/app/(chat)/settings/replace-authenticator.tsx
+similarity index 80%
+rename from app/settings/replace-authenticator.tsx
+rename to app/(chat)/settings/replace-authenticator.tsx
+index e0251fd..78bd042 100644
+--- a/app/settings/replace-authenticator.tsx
++++ b/app/(chat)/settings/replace-authenticator.tsx
+@@ -2,8 +2,8 @@
+ 
+ import { useActionState, useState, useTransition } from 'react';
+ import type { EnrolStart } from '@/lib/auth/mfa';
+-import { FormError, Field, Submit } from '../(auth)/ui';
+-import { QrCode } from '../(auth)/mfa/enroll/qr-code';
++import { FormError, Field, Submit } from '../../(auth)/ui';
++import { QrCode } from '../../(auth)/mfa/enroll/qr-code';
+ import { finishReplacement, startReplacement } from './actions';
+ 
+ // US-13: a code from the current app, then the new app's QR code and a code from it.
+@@ -13,7 +13,7 @@ export function ReplaceAuthenticator() {
+   const [state, action, pending] = useActionState(finishReplacement, undefined);
+ 
+   if (state?.done) {
+-    return <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-900">Done. Use the new app from now on.</p>;
++    return <p className="notice notice-ok">Done. Use the new app from now on.</p>;
+   }
+   if (!start?.ok) {
+     return (
+@@ -23,7 +23,7 @@ export function ReplaceAuthenticator() {
+           const code = new FormData(e.currentTarget).get('currentCode');
+           startTransition(async () => setStart(await startReplacement(typeof code === 'string' ? code : '')));
+         }}
+-        className="space-y-2 rounded border border-gray-300 p-3"
++        className="space-y-3 rounded-lg border border-line p-4"
+       >
+         <p className="text-sm font-medium">Replace my authenticator app</p>
+         <Field label="Code from your current app" name="currentCode" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+@@ -33,7 +33,7 @@ export function ReplaceAuthenticator() {
+     );
+   }
+   return (
+-    <form action={action} className="space-y-3 rounded border border-gray-300 p-3">
++    <form action={action} className="space-y-3 rounded-lg border border-line p-4">
+       <QrCode qr={start.qr} secret={start.secret} />
+       <input type="hidden" name="factorId" value={start.factorId} />
+       <Field label="Code from your new app" name="newCode" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+diff --git a/app/settings/shared-links.tsx b/app/(chat)/settings/shared-links.tsx
+similarity index 75%
+rename from app/settings/shared-links.tsx
+rename to app/(chat)/settings/shared-links.tsx
+index 3a83b78..2ad6eb8 100644
+--- a/app/settings/shared-links.tsx
++++ b/app/(chat)/settings/shared-links.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { useState, useTransition } from 'react';
+ import type { ShareSummary } from '@/lib/chat/shares';
+-import { revokeShareAction } from '../(chat)/actions';
++import { revokeShareAction } from '../actions';
+ 
+ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+ 
+@@ -10,19 +10,19 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { d
+ export function SharedLinks({ shares }: { shares: ShareSummary[] }) {
+   const [error, setError] = useState<string | null>(null);
+   const [pending, startTransition] = useTransition();
+-  if (shares.length === 0) return <p className="text-sm">You have no shared links.</p>;
++  if (shares.length === 0) return <p className="text-sm text-muted">You have no shared links.</p>;
+   return (
+     <>
+-      <ul className="space-y-1 text-sm">
++      <ul className="divide-y divide-line text-sm">
+         {shares.map((s) => (
+-          <li key={s.id} className="flex items-center justify-between gap-2">
+-            <a href={`/s/${s.id}`} className="truncate text-blue-700 underline">
++          <li key={s.id} className="flex items-center justify-between gap-2 py-2">
++            <a href={`/s/${s.id}`} className="link truncate">
+               Shared {shortDate(s.createdAt)}, works until {shortDate(s.expiresAt)}
+             </a>
+             <button
+               type="button"
+               disabled={pending}
+-              className="text-xs text-red-700 underline"
++              className="btn btn-danger btn-sm shrink-0"
+               onClick={() =>
+                 startTransition(async () => {
+                   const result = await revokeShareAction(s.id);
+@@ -36,7 +36,7 @@ export function SharedLinks({ shares }: { shares: ShareSummary[] }) {
+         ))}
+       </ul>
+       {error && (
+-        <p role="alert" className="text-xs text-red-700">
++        <p role="alert" className="text-xs text-brand">
+           {error}
+         </p>
+       )}
+diff --git a/app/(chat)/sidebar.tsx b/app/(chat)/sidebar.tsx
+new file mode 100644
+index 0000000..d9a4502
+--- /dev/null
++++ b/app/(chat)/sidebar.tsx
+@@ -0,0 +1,79 @@
++'use client';
++
++import Link from 'next/link';
++import { usePathname } from 'next/navigation';
++import type { ReactNode } from 'react';
++import { Brand } from '@/components/brand';
++import { ChartIcon, ChecklistIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
++import type { ConversationSummary } from '@/lib/chat/history';
++import type { Role } from '@/lib/rag/types';
++import { SignOutButton } from '../(auth)/sign-out-button';
++import { ConversationList } from './conversation-list';
++
++function NavLink({ href, icon, children }: { href: string; icon: ReactNode; children: ReactNode }) {
++  const current = usePathname() === href;
++  return (
++    <Link href={href} prefetch={false} className="nav-link" aria-current={current ? 'page' : undefined}>
++      {icon}
++      {children}
++    </Link>
++  );
++}
++
++// The dark sidebar on every signed-in page: a new chat, the pages this account can use, the
++// conversation history (US-10) and who is signed in. Passengers see the checklist; administrators
++// see Insights. Agents see neither.
++export function Sidebar({
++  conversations,
++  email,
++  role,
++  isAdmin,
++}: {
++  conversations: ConversationSummary[];
++  email: string;
++  role: Role;
++  isAdmin: boolean;
++}) {
++  return (
++    <nav aria-label="Main" className="flex h-full flex-col gap-4">
++      <div className="hidden px-1 md:block">
++        <Brand />
++      </div>
++      <Link href="/" prefetch={false} className="btn btn-primary w-full">
++        <PlusIcon />
++        New chat
++      </Link>
++      <div className="space-y-1">
++        {role === 'customer' && (
++          <NavLink href="/checklist" icon={<ChecklistIcon />}>
++            Pre-travel checklist
++          </NavLink>
++        )}
++        <NavLink href="/settings" icon={<SettingsIcon />}>
++          Settings
++        </NavLink>
++        {isAdmin && (
++          <NavLink href="/admin" icon={<ChartIcon />}>
++            Insights
++          </NavLink>
++        )}
++      </div>
++      <div className="min-h-0 flex-1 overflow-y-auto border-t border-[#2c2c33] pt-4">
++        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your conversations</p>
++        <ConversationList conversations={conversations} />
++      </div>
++      <div className="flex items-center gap-2 border-t border-[#2c2c33] pt-3">
++        <div className="min-w-0 flex-1">
++          <p className="truncate text-sm text-white" title={email}>
++            {email}
++          </p>
++          <p className="text-xs text-zinc-400">{role === 'agent' ? 'Call-centre agent' : isAdmin ? 'Passenger · administrator' : 'Passenger'}</p>
++        </div>
++        <SignOutButton className="nav-link px-2" >
++          <SignOutIcon />
++          <span className="sr-only">Sign out</span>
++        </SignOutButton>
++      </div>
++    </nav>
++  );
++}
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+deleted file mode 100644
+index fcf61f9..0000000
+--- a/app/admin/page.tsx
++++ /dev/null
+@@ -1,148 +0,0 @@
+-import type { Metadata } from 'next';
+-import Link from 'next/link';
+-import { notFound } from 'next/navigation';
+-import { FEEDBACK_REASONS, type FeedbackReason } from '@/lib/chat/feedback';
+-import { getInsights } from '@/lib/admin/insights';
+-import { requireAal2 } from '@/lib/supabase/server';
+-import { AnswerText } from '../(chat)/answer-text';
+-
+-export const metadata: Metadata = { title: 'Insights · KQ Policy Assistant', robots: { index: false, follow: false } };
+-
+-const percent = (part: number, whole: number) => (whole === 0 ? '–' : `${Math.round((part / whole) * 100)}%`);
+-const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+-const reasonLabel = (reason: string | null) =>
+-  reason && Object.hasOwn(FEEDBACK_REASONS, reason) ? FEEDBACK_REASONS[reason as FeedbackReason] : 'No reason given';
+-
+-// The administrator's insights dashboard (overview §7.13, US-21). Admins only: anyone else gets a
+-// 404, and the database refuses them too. Each visit is written to the audit log by the database.
+-// It shows no user emails or ids, and only monthly totals for anything older than 30 days.
+-export default async function AdminPage() {
+-  const { supabase, user } = await requireAal2();
+-  if (user.app_metadata?.role !== 'admin') notFound();
+-  const insights = await getInsights(supabase);
+-  if (!insights) notFound();
+-
+-  const { daily, monthly, kinds, topics, gaps, feedback } = insights;
+-  const answers = kinds.answer ?? 0;
+-  const escalations = kinds.escalation ?? 0;
+-  const refusals = kinds.refusal ?? 0;
+-  const replies = answers + escalations + refusals;
+-  const busiest = Math.max(1, ...daily.map((d) => d.questions));
+-  const box = 'rounded border border-gray-300 p-4';
+-
+-  return (
+-    <main className="mx-auto w-full max-w-4xl space-y-6 p-6">
+-      <Link href="/" className="text-sm text-blue-700 underline">
+-        Back to the chat
+-      </Link>
+-      <h1 className="text-2xl font-semibold">Insights</h1>
+-      <p className="text-sm text-gray-600">
+-        Last 30 days unless marked. Questions are shown as users typed them, with personal details masked. This visit is
+-        recorded in the audit log.
+-      </p>
+-
+-      <section className="grid gap-4 sm:grid-cols-4" aria-label="Replies">
+-        <div className={box}>
+-          <p className="text-sm text-gray-600">Questions</p>
+-          <p className="text-2xl font-semibold">{daily.reduce((n, d) => n + d.questions, 0)}</p>
+-        </div>
+-        <div className={box}>
+-          <p className="text-sm text-gray-600">Answered</p>
+-          <p className="text-2xl font-semibold">{percent(answers, replies)}</p>
+-        </div>
+-        <div className={box}>
+-          <p className="text-sm text-gray-600">Escalated</p>
+-          <p className="text-2xl font-semibold">{percent(escalations, replies)}</p>
+-        </div>
+-        <div className={box}>
+-          <p className="text-sm text-gray-600">Refused (off topic)</p>
+-          <p className="text-2xl font-semibold">{percent(refusals, replies)}</p>
+-        </div>
+-      </section>
+-
+-      <section className={box}>
+-        <h2 className="font-semibold">Questions per day</h2>
+-        {daily.length === 0 ? (
+-          <p className="text-sm">No questions yet.</p>
+-        ) : (
+-          <ul className="mt-2 space-y-1 text-sm">
+-            {daily.map((d) => (
+-              <li key={d.day} className="flex items-center gap-2">
+-                <span className="w-16 shrink-0 text-gray-600">{shortDate(d.day)}</span>
+-                {/* A native bar: inline styles are blocked by the Content-Security-Policy. */}
+-                <progress className="h-3 flex-1 accent-blue-600" value={d.questions} max={busiest} aria-hidden="true" />
+-                <span>{d.questions}</span>
+-              </li>
+-            ))}
+-          </ul>
+-        )}
+-        {monthly.length > 0 && (
+-          <>
+-            <h3 className="mt-4 text-sm font-semibold">Earlier, per month</h3>
+-            <ul className="text-sm">
+-              {monthly.map((m) => (
+-                <li key={m.month}>
+-                  {m.month}: {m.questions}
+-                </li>
+-              ))}
+-            </ul>
+-          </>
+-        )}
+-      </section>
+-
+-      <section className={box}>
+-        <h2 className="font-semibold">Knowledge gaps</h2>
+-        <p className="text-sm text-gray-600">Escalated questions, grouped when they share most of their words. Add policies for the top ones.</p>
+-        {gaps.length === 0 ? (
+-          <p className="mt-2 text-sm">No escalations.</p>
+-        ) : (
+-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+-            {gaps.map((g) => (
+-              <li key={g.example}>
+-                {g.example} <span className="text-gray-600">({g.count}×)</span>
+-              </li>
+-            ))}
+-          </ol>
+-        )}
+-      </section>
+-
+-      <section className={box}>
+-        <h2 className="font-semibold">Most-cited documents</h2>
+-        {topics.length === 0 ? (
+-          <p className="mt-2 text-sm">No answers yet.</p>
+-        ) : (
+-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+-            {topics.map((t) => (
+-              <li key={t.title}>
+-                {t.title} <span className="text-gray-600">({t.answers} answers)</span>
+-              </li>
+-            ))}
+-          </ol>
+-        )}
+-      </section>
+-
+-      <section className={box}>
+-        <h2 className="font-semibold">Feedback</h2>
+-        <p className="text-sm">
+-          Helpful: {percent(feedback.up, feedback.up + feedback.down)} of {feedback.up + feedback.down} ratings.
+-        </p>
+-        <h3 className="mt-3 text-sm font-semibold">Latest thumbs-down</h3>
+-        {feedback.latest_down.length === 0 ? (
+-          <p className="text-sm">None.</p>
+-        ) : (
+-          <ul className="mt-1 space-y-3 text-sm">
+-            {feedback.latest_down.map((f, i) => (
+-              <li key={i} className="border-t border-gray-300 pt-2">
+-                <p className="text-gray-600">
+-                  {shortDate(f.at)}: {reasonLabel(f.reason)}
+-                </p>
+-                {f.question && <p className="font-semibold">{f.question}</p>}
+-                <AnswerText text={f.answer} />
+-              </li>
+-            ))}
+-          </ul>
+-        )}
+-      </section>
+-    </main>
+-  );
+-}
+diff --git a/app/error.tsx b/app/error.tsx
+index 8d6d66e..cb4c9e9 100644
+--- a/app/error.tsx
++++ b/app/error.tsx
+@@ -6,17 +6,19 @@ import Link from 'next/link';
+ // Next.js sends the browser only a reference (the digest), which matches the Worker's log entry.
+ export default function ErrorPage({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
+   return (
+-    <main className="mx-auto w-full max-w-md space-y-3 p-6 text-sm">
+-      <h1 className="text-xl font-semibold">Sorry, something went wrong</h1>
+-      <p>Please try again. If it keeps happening, come back a little later.</p>
+-      {error.digest && <p className="text-gray-600">Reference: {error.digest}</p>}
+-      <div className="flex gap-3">
+-        <button type="button" onClick={() => retry()} className="rounded bg-blue-600 px-3 py-1.5 font-semibold text-white">
+-          Try again
+-        </button>
+-        <Link href="/" className="px-3 py-1.5 text-blue-700 underline">
+-          Go to the start
+-        </Link>
++    <main className="flex flex-1 items-center justify-center p-4">
++      <div className="card card-brand w-full max-w-md space-y-3 p-8 text-sm">
++        <h1 className="text-xl font-semibold">Sorry, something went wrong</h1>
++        <p className="text-muted">Please try again. If it keeps happening, come back a little later.</p>
++        {error.digest && <p className="text-xs text-muted">Reference: {error.digest}</p>}
++        <div className="flex gap-2 pt-1">
++          <button type="button" onClick={() => retry()} className="btn btn-primary">
++            Try again
++          </button>
++          <Link href="/" className="btn btn-ok">
++            Go to the start
++          </Link>
++        </div>
+       </div>
+     </main>
+   );
+diff --git a/app/globals.css b/app/globals.css
+index b51c3c4..2e27aca 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -5,6 +5,14 @@
+   --color-foreground: var(--foreground);
+   /* Cards, inputs and buttons. White in light mode; `white` itself stays white for text on blue. */
+   --color-surface: var(--surface);
++  /* The look of the app: a dark sidebar, red for actions and green for confirmed or safe things. */
++  --color-brand: var(--brand);
++  --color-brand-soft: var(--brand-soft);
++  --color-ok: var(--ok);
++  --color-ok-soft: var(--ok-soft);
++  --color-line: var(--line);
++  --color-muted: var(--muted);
++  --color-ink: var(--ink);
+   --font-sans: var(--font-geist-sans);
+   --font-mono: var(--font-geist-mono);
+ }
+@@ -17,9 +25,25 @@
+  */
+ :root {
+   color-scheme: light dark;
+-  --background: light-dark(#ffffff, #0a0a0a);
+-  --foreground: light-dark(#171717, #ededed);
+-  --surface: light-dark(#ffffff, oklch(21% 0.034 264.665));
++  --background: light-dark(#f5f5f6, #0c0d10);
++  --foreground: light-dark(#18181b, #ececee);
++  --surface: light-dark(#ffffff, #16181d);
++  /* Red for links and highlights. Solid red buttons keep the same red in both modes, for contrast with white text. */
++  --brand: light-dark(#c8102e, #ff7385);
++  --brand-solid: #c8102e;
++  --brand-solid-hover: #a10c24;
++  --brand-soft: light-dark(#fdecef, #3b1219);
++  --ok: light-dark(#15803d, #4ade80);
++  --ok-soft: light-dark(#ecfdf3, #0f2a1b);
++  --ok-line: light-dark(#86efac, #166534);
++  --line: light-dark(#e4e4e7, #2a2d35);
++  --muted: light-dark(#52525b, #a1a1aa);
++  /* The sidebar is dark in both modes. */
++  --ink: #111114;
++  --ink-hover: #1f1f24;
++  --ink-line: #2c2c33;
++  --ink-text: #f4f4f5;
++  --ink-muted: #a1a1aa;
+   --color-gray-50: light-dark(oklch(98.5% 0.002 247.839), oklch(21% 0.034 264.665));
+   --color-gray-100: light-dark(oklch(96.7% 0.003 264.542), oklch(27.8% 0.033 256.848));
+   --color-gray-200: light-dark(oklch(92.8% 0.006 264.531), oklch(27.8% 0.033 256.848));
+@@ -69,7 +93,234 @@
+ body {
+   background: var(--background);
+   color: var(--foreground);
+-  font-family: Arial, Helvetica, sans-serif;
++  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
++}
++
++/*
++ * Shared building blocks, so every page looks the same. Plain classes rather than long lists of
++ * utilities in each component; Tailwind utilities on the same element still win.
++ */
++@layer components {
++  .card {
++    background: var(--surface);
++    border: 1px solid var(--line);
++    border-radius: 0.875rem;
++    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
++  }
++  /* A card with a green edge on top, for figures and confirmed results. */
++  .card-ok {
++    border-top: 3px solid var(--ok);
++  }
++  .card-brand {
++    border-top: 3px solid var(--brand-solid);
++  }
++
++  .btn {
++    display: inline-flex;
++    align-items: center;
++    justify-content: center;
++    gap: 0.4rem;
++    border-radius: 0.6rem;
++    padding: 0.5rem 0.9rem;
++    font-size: 0.875rem;
++    font-weight: 600;
++    line-height: 1.25rem;
++    border: 1px solid transparent;
++    cursor: pointer;
++    transition: background-color 120ms, border-color 120ms, color 120ms;
++  }
++  .btn:disabled {
++    opacity: 0.55;
++    cursor: not-allowed;
++  }
++  .btn:focus-visible,
++  .chip:focus-visible,
++  .nav-link:focus-visible {
++    outline: 2px solid var(--brand);
++    outline-offset: 2px;
++  }
++  .btn-primary {
++    background: var(--brand-solid);
++    color: #fff;
++  }
++  .btn-primary:hover:not(:disabled) {
++    background: var(--brand-solid-hover);
++  }
++  .btn-outline {
++    background: var(--surface);
++    border-color: var(--line);
++    color: var(--foreground);
++  }
++  .btn-outline:hover:not(:disabled) {
++    border-color: var(--muted);
++  }
++  /* Outlined in green: the safe way out of a form, like the reference design's Cancel and Clear. */
++  .btn-ok {
++    background: var(--surface);
++    border-color: var(--ok);
++    color: var(--ok);
++  }
++  .btn-ok:hover:not(:disabled) {
++    background: var(--ok-soft);
++  }
++  .btn-danger {
++    background: var(--surface);
++    border-color: var(--brand);
++    color: var(--brand);
++  }
++  .btn-danger:hover:not(:disabled) {
++    background: var(--brand-soft);
++  }
++  .btn-sm {
++    padding: 0.25rem 0.6rem;
++    font-size: 0.75rem;
++    line-height: 1rem;
++    border-radius: 0.5rem;
++  }
++
++  .chip {
++    display: inline-flex;
++    align-items: center;
++    border-radius: 9999px;
++    border: 1px solid var(--line);
++    background: var(--surface);
++    padding: 0.3rem 0.8rem;
++    font-size: 0.8125rem;
++    text-align: left;
++    color: var(--foreground);
++    cursor: pointer;
++    transition: border-color 120ms, background-color 120ms;
++  }
++  .chip:hover:not(:disabled) {
++    border-color: var(--brand);
++    background: var(--brand-soft);
++  }
++  .chip[aria-pressed='true'] {
++    border-color: var(--brand-solid);
++    background: var(--brand-solid);
++    color: #fff;
++  }
++
++  .input {
++    display: block;
++    width: 100%;
++    border-radius: 0.6rem;
++    border: 1px solid var(--line);
++    background: var(--surface);
++    padding: 0.5rem 0.75rem;
++    font-size: 0.875rem;
++    color: var(--foreground);
++  }
++  .input:focus {
++    outline: 2px solid var(--brand);
++    outline-offset: -1px;
++    border-color: transparent;
++  }
++
++  .link {
++    color: var(--brand);
++    font-weight: 500;
++    text-decoration: underline;
++    text-underline-offset: 2px;
++  }
++
++  .badge {
++    display: inline-flex;
++    align-items: center;
++    border-radius: 9999px;
++    padding: 0.05rem 0.55rem;
++    font-size: 0.6875rem;
++    font-weight: 600;
++    line-height: 1.1rem;
++    white-space: nowrap;
++  }
++  .badge-ok {
++    background: var(--ok-soft);
++    color: var(--ok);
++    border: 1px solid var(--ok-line);
++  }
++  .badge-brand {
++    background: var(--brand-soft);
++    color: var(--brand);
++    border: 1px solid var(--brand);
++  }
++  .badge-solid {
++    background: var(--brand-solid);
++    color: #fff;
++  }
++  .badge-muted {
++    background: transparent;
++    color: var(--muted);
++    border: 1px solid var(--line);
++  }
++
++  .notice {
++    border-radius: 0.6rem;
++    padding: 0.5rem 0.75rem;
++    font-size: 0.875rem;
++  }
++  .notice-ok {
++    background: var(--ok-soft);
++    color: var(--ok);
++    border: 1px solid var(--ok-line);
++  }
++  .notice-error {
++    background: var(--brand-soft);
++    color: var(--brand);
++    border: 1px solid var(--brand);
++  }
++
++  /* The dark sidebar. */
++  .sidebar {
++    background: var(--ink);
++    color: var(--ink-text);
++  }
++  .nav-link {
++    display: flex;
++    align-items: center;
++    gap: 0.6rem;
++    border-radius: 0.6rem;
++    padding: 0.5rem 0.75rem;
++    font-size: 0.875rem;
++    color: var(--ink-muted);
++    transition: background-color 120ms, color 120ms;
++  }
++  .nav-link:hover {
++    background: var(--ink-hover);
++    color: var(--ink-text);
++  }
++  .nav-link[aria-current='page'] {
++    background: var(--brand-solid);
++    color: #fff;
++  }
++  .sidebar-input {
++    display: block;
++    width: 100%;
++    min-width: 0;
++    border-radius: 0.6rem;
++    border: 1px solid var(--ink-line);
++    background: var(--ink-hover);
++    padding: 0.4rem 0.6rem;
++    font-size: 0.8125rem;
++    color: var(--ink-text);
++  }
++  .sidebar-input::placeholder {
++    color: var(--ink-muted);
++  }
++  .sidebar-input:focus {
++    outline: 2px solid var(--brand-solid);
++    outline-offset: -1px;
++  }
++}
++
++/* People who ask for less motion get none. */
++@media (prefers-reduced-motion: reduce) {
++  *,
++  *::before,
++  *::after {
++    transition: none !important;
++    animation: none !important;
++  }
+ }
+ 
+ /* Printed checklists (overview §7.10) are always black on white, whatever the screen mode. */
+diff --git a/app/not-found.tsx b/app/not-found.tsx
+index 2ccab07..b9af9bc 100644
+--- a/app/not-found.tsx
++++ b/app/not-found.tsx
+@@ -1,13 +1,20 @@
+ import Link from 'next/link';
++import { Brand } from '@/components/brand';
+ 
+ export default function NotFound() {
+   return (
+-    <main className="mx-auto w-full max-w-md space-y-3 p-6 text-sm">
+-      <h1 className="text-xl font-semibold">Page not found</h1>
+-      <p>This page doesn&apos;t exist, or you don&apos;t have access to it.</p>
+-      <Link href="/" className="text-blue-700 underline">
+-        Go to the start
+-      </Link>
++    <main className="flex min-h-dvh items-center justify-center p-4">
++      <div className="card w-full max-w-md space-y-4 p-8 text-center">
++        <div className="flex justify-center">
++          <Brand tone="light" />
++        </div>
++        <p className="text-5xl font-semibold text-brand">404</p>
++        <h1 className="text-xl font-semibold">Page not found</h1>
++        <p className="text-sm text-muted">This page doesn&apos;t exist, or you don&apos;t have access to it.</p>
++        <Link href="/" className="btn btn-primary">
++          Go to the start
++        </Link>
++      </div>
+     </main>
+   );
+ }
+diff --git a/app/privacy/page.tsx b/app/privacy/page.tsx
+index 5d656c2..57e8751 100644
+--- a/app/privacy/page.tsx
++++ b/app/privacy/page.tsx
+@@ -1,5 +1,6 @@
+ import type { Metadata } from 'next';
+ import Link from 'next/link';
++import { Brand } from '@/components/brand';
+ import { DISCLAIMER, PRIVACY_VERSION } from '@/lib/legal';
+ 
+ export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistant' };
+@@ -7,12 +8,18 @@ export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistan
+ // Overview §11. Public, so it can be read before signing up.
+ export default function PrivacyPage() {
+   return (
+-    <main className="mx-auto w-full max-w-2xl space-y-5 p-6 text-sm leading-6">
+-      <Link href="/" className="text-blue-700 underline">
+-        Back to the assistant
+-      </Link>
+-      <h1 className="text-2xl font-semibold">Privacy notice</h1>
+-      <p className="text-gray-600">Version {PRIVACY_VERSION}</p>
++    <>
++    <header className="sidebar px-4 py-3">
++      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
++        <Brand />
++        <Link href="/" className="nav-link">
++          Back to the assistant
++        </Link>
++      </div>
++    </header>
++    <main className="card mx-auto my-6 w-[calc(100%-2rem)] max-w-3xl space-y-5 p-6 text-sm leading-6 sm:p-8">
++      <h1 className="text-2xl font-semibold tracking-tight">Privacy notice</h1>
++      <p className="text-muted">Version {PRIVACY_VERSION}</p>
+       <p>{DISCLAIMER}</p>
+ 
+       <section className="space-y-2">
+@@ -94,5 +101,6 @@ export default function PrivacyPage() {
+         </p>
+       </section>
+     </main>
++    </>
+   );
+ }
+diff --git a/app/s/[id]/page.tsx b/app/s/[id]/page.tsx
+index ecbf8af..cab6a66 100644
+--- a/app/s/[id]/page.tsx
++++ b/app/s/[id]/page.tsx
+@@ -1,6 +1,7 @@
+ import type { Metadata } from 'next';
+ import Link from 'next/link';
+ import { createClient } from '@supabase/supabase-js';
++import { Brand } from '@/components/brand';
+ import { getSharedAnswer } from '@/lib/chat/shares';
+ import { getServerEnv } from '@/lib/env';
+ import { DISCLAIMER } from '@/lib/legal';
+@@ -21,28 +22,38 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
+   const shared = await getSharedAnswer(supabase, id);
+ 
+   return (
+-    <main className="mx-auto w-full max-w-2xl space-y-4 p-6">
+-      <h1 className="text-2xl font-semibold">Shared answer</h1>
++    <>
++    <header className="sidebar px-4 py-3">
++      <div className="mx-auto max-w-3xl">
++        <Brand />
++      </div>
++    </header>
++    <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
++      <h1 className="text-2xl font-semibold tracking-tight">Shared answer</h1>
+       {!shared ? (
+-        <p>This link has expired or was turned off by the person who shared it.</p>
++        <p className="card p-4">This link has expired or was turned off by the person who shared it.</p>
+       ) : (
+         <>
+-          <p className="text-sm text-gray-600">Answered on {longDate(shared.answeredAt)}. Policies change, so check the sources for the latest rules.</p>
++          <p className="text-sm text-muted">Answered on {longDate(shared.answeredAt)}. Policies change, so check the sources for the latest rules.</p>
+           {shared.question && (
+-            <div className="whitespace-pre-wrap rounded-lg bg-blue-500 px-4 py-2 text-white">{shared.question}</div>
++            <div className="flex justify-end">
++              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white">
++                {shared.question}
++              </div>
++            </div>
+           )}
+-          <div className="rounded-lg bg-gray-200 px-4 py-2 text-black">
++          <div className="card px-4 py-3">
+             <AnswerText text={shared.answer} />
+             {shared.sources.length > 0 && (
+-              <div className="mt-2 border-t border-gray-300 pt-2 text-xs text-gray-700">
+-                <p className="font-semibold">Sources</p>
++              <div className="mt-3 rounded-lg border border-line p-3 text-xs text-muted">
++                <p className="font-semibold text-foreground">Sources</p>
+                 <ul className="mt-1 space-y-1">
+                   {shared.sources.map((s, i) => {
+                     const label = s.section ? `${s.title}: ${s.section}` : s.title;
+                     return (
+                       <li key={i}>
+                         {s.url?.startsWith('https://') ? (
+-                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
++                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="link">
+                             {label}
+                           </a>
+                         ) : (
+@@ -57,10 +68,11 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
+           </div>
+         </>
+       )}
+-      <p className="text-xs text-gray-500">{DISCLAIMER}</p>
+-      <Link href="/" className="text-sm text-blue-700 underline">
++      <p className="text-xs text-muted">{DISCLAIMER}</p>
++      <Link href="/" className="btn btn-primary">
+         Ask your own question
+       </Link>
+     </main>
++    </>
+   );
+ }
+diff --git a/app/settings/page.tsx b/app/settings/page.tsx
+deleted file mode 100644
+index 29f8cf9..0000000
+--- a/app/settings/page.tsx
++++ /dev/null
+@@ -1,77 +0,0 @@
+-import Link from 'next/link';
+-import { appearanceFrom } from '@/lib/appearance';
+-import { listShares } from '@/lib/chat/shares';
+-import { requireAal2 } from '@/lib/supabase/server';
+-import { SignOutButton } from '../(auth)/sign-out-button';
+-import { AppearanceSettings } from './appearance';
+-import { DeleteAccount } from './delete-account';
+-import { ReplaceAuthenticator } from './replace-authenticator';
+-import { SharedLinks } from './shared-links';
+-
+-const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+-
+-// Account and security settings (overview §7.4), and account deletion (§11).
+-export default async function SettingsPage() {
+-  const { supabase, user, role } = await requireAal2();
+-  const shares = role === 'agent' ? [] : await listShares(supabase);
+-  const authenticators = (user.factors ?? []).filter((f) => f.factor_type === 'totp' && f.status === 'verified');
+-
+-  return (
+-    <main className="mx-auto w-full max-w-lg space-y-6 p-6">
+-      <Link href="/" className="text-sm text-blue-700 underline">
+-        Back to the chat
+-      </Link>
+-      <h1 className="text-2xl font-semibold">Settings</h1>
+-
+-      <section className="space-y-1">
+-        <h2 className="text-lg font-semibold">Account</h2>
+-        <p className="text-sm">Email: {user.email}</p>
+-        <p className="text-sm">Account type: {role === 'agent' ? 'Call-centre agent' : 'Passenger'}</p>
+-      </section>
+-
+-      <section className="space-y-2">
+-        <h2 className="text-lg font-semibold">Display</h2>
+-        <AppearanceSettings initial={appearanceFrom(user.user_metadata)} />
+-      </section>
+-
+-      <section className="space-y-2">
+-        <h2 className="text-lg font-semibold">Two-step sign-in</h2>
+-        <p className="text-sm">
+-          On. It can&apos;t be turned off. You sign in with your password and a code from:{' '}
+-          {authenticators.map((f) => `${f.friendly_name ?? 'Authenticator app'}, added ${longDate(f.created_at)}`).join('; ')}
+-        </p>
+-        <ReplaceAuthenticator />
+-      </section>
+-
+-      {role !== 'agent' && (
+-        <section className="space-y-2">
+-          <h2 className="text-lg font-semibold">Shared answers</h2>
+-          <p className="text-sm">Links you shared stop working after 30 days, or straight away when you stop sharing them.</p>
+-          <SharedLinks shares={shares} />
+-        </section>
+-      )}
+-
+-      <section className="space-y-2">
+-        <h2 className="text-lg font-semibold">Sign out</h2>
+-        <p className="text-sm">Signs you out of this browser.</p>
+-        <SignOutButton className="rounded border border-gray-400 px-3 py-1.5 text-sm" />
+-      </section>
+-
+-      <section className="space-y-2">
+-        <h2 className="text-lg font-semibold">Delete my account</h2>
+-        {role === 'agent' ? (
+-          <p className="text-sm">Agent accounts are removed by your administrator.</p>
+-        ) : (
+-          <DeleteAccount />
+-        )}
+-        <p className="text-sm">
+-          See the{' '}
+-          <Link href="/privacy" className="text-blue-700 underline">
+-            privacy notice
+-          </Link>{' '}
+-          for what we keep and for how long.
+-        </p>
+-      </section>
+-    </main>
+-  );
+-}
+diff --git a/components/brand.tsx b/components/brand.tsx
+new file mode 100644
+index 0000000..8429823
+--- /dev/null
++++ b/components/brand.tsx
+@@ -0,0 +1,17 @@
++// The app's name with a small plane mark. Not the airline's logo: this is an independent
++// project, and the disclaimer says so on every page.
++export function Brand({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
++  return (
++    <span className="flex items-center gap-2">
++      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#c8102e] text-white" aria-hidden="true">
++        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" focusable="false">
++          <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
++        </svg>
++      </span>
++      <span className="leading-tight">
++        <span className={`block text-sm font-bold ${tone === 'dark' ? 'text-white' : 'text-foreground'}`}>KQ Policy Assistant</span>
++        <span className={`block text-[11px] ${tone === 'dark' ? 'text-zinc-400' : 'text-muted'}`}>Travel policy answers with sources</span>
++      </span>
++    </span>
++  );
++}
+diff --git a/components/icons.tsx b/components/icons.tsx
+new file mode 100644
+index 0000000..9cc1307
+--- /dev/null
++++ b/components/icons.tsx
+@@ -0,0 +1,86 @@
++import type { SVGProps } from 'react';
++
++// Small line icons for the sidebar and buttons. Inline SVG: no icon library to download, and they
++// take the text colour around them. Each is decorative; the text next to it carries the meaning.
++function Icon({ children, ...props }: SVGProps<SVGSVGElement>) {
++  return (
++    <svg
++      viewBox="0 0 24 24"
++      width="18"
++      height="18"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="1.8"
++      strokeLinecap="round"
++      strokeLinejoin="round"
++      aria-hidden="true"
++      focusable="false"
++      {...props}
++    >
++      {children}
++    </svg>
++  );
++}
++
++export const PlusIcon = () => (
++  <Icon>
++    <path d="M12 5v14M5 12h14" />
++  </Icon>
++);
++
++export const ChatIcon = () => (
++  <Icon>
++    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
++  </Icon>
++);
++
++export const ChecklistIcon = () => (
++  <Icon>
++    <path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />
++  </Icon>
++);
++
++export const SettingsIcon = () => (
++  <Icon>
++    <circle cx="12" cy="12" r="3" />
++    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
++  </Icon>
++);
++
++export const ChartIcon = () => (
++  <Icon>
++    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
++  </Icon>
++);
++
++export const SignOutIcon = () => (
++  <Icon>
++    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
++  </Icon>
++);
++
++export const SearchIcon = () => (
++  <Icon width="16" height="16">
++    <circle cx="11" cy="11" r="7" />
++    <path d="m20 20-3.5-3.5" />
++  </Icon>
++);
++
++export const SendIcon = () => (
++  <Icon>
++    <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />
++  </Icon>
++);
++
++export const MenuIcon = () => (
++  <Icon>
++    <path d="M4 6h16M4 12h16M4 18h16" />
++  </Icon>
++);
++
++export const ShieldIcon = () => (
++  <Icon>
++    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
++    <path d="m9 12 2 2 4-4" />
++  </Icon>
++);
+diff --git a/components/page-header.tsx b/components/page-header.tsx
+new file mode 100644
+index 0000000..37011d4
+--- /dev/null
++++ b/components/page-header.tsx
+@@ -0,0 +1,14 @@
++import type { ReactNode } from 'react';
++
++// The title row at the top of each signed-in page.
++export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
++  return (
++    <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
++      <div>
++        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
++        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
++      </div>
++      {actions && <div className="flex gap-2 print:hidden">{actions}</div>}
++    </header>
++  );
++}

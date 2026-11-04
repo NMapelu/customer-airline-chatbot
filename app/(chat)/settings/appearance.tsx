@@ -22,7 +22,7 @@ export function AppearanceSettings({ initial }: { initial: Appearance }) {
     });
   };
 
-  const select = 'rounded border border-gray-400 bg-surface px-2 py-1 text-sm';
+  const select = 'input w-auto py-1.5';
   return (
     <div className="space-y-2 text-sm">
       <label className="flex items-center justify-between gap-2">
@@ -45,7 +45,7 @@ export function AppearanceSettings({ initial }: { initial: Appearance }) {
           ))}
         </select>
       </label>
-      <p role="status" className="text-xs text-gray-600">
+      <p role="status" className="text-xs text-ok">
         {message}
       </p>
     </div>
