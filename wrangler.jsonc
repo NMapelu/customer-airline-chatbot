@@ -11,6 +11,10 @@
 	// Serve only the main workers.dev URL. Per-version preview URLs stay off so old builds aren't publicly reachable.
 	"workers_dev": true,
 	"preview_urls": false,
+	// Workers AI turns each question into numbers for the Random Forest scope check (lib/rag/forest.ts).
+	"ai": { "binding": "AI" },
+		// The Random Forest model (scope-forest.json from Colab), read by lib/rag/forest.ts.
+	"kv_namespaces": [{ "binding": "SCOPE_FOREST", "id": "7941d150e3cb4f5d8985c3c9fb940a4d" }],
 	"observability": {
 		"enabled": true
 	},
