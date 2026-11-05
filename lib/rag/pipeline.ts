@@ -5,6 +5,7 @@ import { checkCoverage } from './coverage';
 import { applyGate } from './gate';
 import { mergeResults, retrieve } from './retrieve';
 import { policyQuery, rewriteQuestion } from './rewrite';
+import { forestScope } from './forest';
 import { checkScope } from './scope';
 import type { RetrievedChunk, Role, Turn } from './types';
 
@@ -31,9 +32,14 @@ export type PipelineInput = {
 export async function decide({ model, checkModel, embeddingModel, supabase, role, turns, threshold }: PipelineInput): Promise<Decision> {
   // 5. Scope check (R1) on the user's own words, then 4. rewrite a follow-up for retrieval.
   //    The check runs first because the rewrite could make an off-topic message look in scope.
-  const scope = await checkScope(checkModel, turns, role);
-  if (scope === 'unavailable') return { kind: 'unavailable' };
-  if (scope === 'off_topic') return { kind: 'refusal' };
+  //    The Random Forest goes first; the gpt-4o check runs only when the forest isn't confident.
+  const quick = await forestScope(turns);
+  if (quick === 'off_topic') return { kind: 'refusal' };
+  if (quick === 'unsure') {
+    const scope = await checkScope(checkModel, turns, role);
+    if (scope === 'unavailable') return { kind: 'unavailable' };
+    if (scope === 'off_topic') return { kind: 'refusal' };
+  }
   const standalone = await rewriteQuestion(model, turns);
 
   // 6. Retrieval, under the user's own session and RLS: once with the question and once with it
