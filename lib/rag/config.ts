@@ -4,16 +4,8 @@
 // makes the final call. 0.38 sits just under the lowest covered question on the second run
 // (0.397). TOP_K went from 5 to 8 because facts the corpus does have (the 158 cm bag size) were
 // missing from answers built on five passages.
-//
-// Answers and follow-up rewrites use gpt-4o: on every eval run gpt-4o-mini mixed up check-in
-// times (online check-in versus airport counters, opening versus closing), and a wrong deadline
-// is the main risk this assistant exists to avoid (threat I5).
-export const CHAT_MODEL = 'gpt-4o';
-export const EMBEDDING_MODEL = 'text-embedding-3-small';
-// The scope and coverage checks decide whether to refuse, escalate or answer. On gpt-4o-mini they
-// refused or escalated questions the passages answer, mostly ones whose answer is "no" (pets in
-// the cabin, Asante points for Ezesha), so they use a stronger model. Each is one short call.
-export const CHECK_MODEL = 'gpt-4o';
+// These were measured with OpenAI's models; Gemini's similarities differ, so rerun `npm run eval`
+// after switching AI_PROVIDER. The models themselves are chosen in lib/ai/models.ts.
 export const TOP_K = 8;
 export const SIMILARITY_THRESHOLD = 0.38;
 

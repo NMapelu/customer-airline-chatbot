@@ -1,10 +1,10 @@
-import { createOpenAI } from '@ai-sdk/openai';
 import { createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream, type ToolSet } from 'ai';
 import { z } from 'zod';
 import { openConversation, recentTurns, saveMessage } from '@/lib/chat/history';
 import { getChatSession } from '@/lib/chat-session';
 import { sourcesFrom, streamAnswer } from '@/lib/rag/answer';
-import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
+import { createModels } from '@/lib/ai/models';
+import { HISTORY_TURNS, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { decide } from '@/lib/rag/pipeline';
@@ -114,13 +114,13 @@ export async function POST(req: Request) {
     return jsonError(413, `Please keep your question under ${MAX_QUESTION_CHARS} characters.`);
   }
 
-  // R7: mask personal details before the question goes to OpenAI or into the history.
+  // R7: mask personal details before the question goes to the AI provider or into the history.
   const { text: masked, found } = maskPii(question);
   const piiMasked = found.length > 0;
 
   const { env, supabase, role } = session;
-  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
-  const model = openai(CHAT_MODEL);
+  const models = createModels(env);
+  const model = models.chat;
 
   try {
     // 9. History: open (or create) the conversation, read the earlier turns, save the question.
@@ -131,8 +131,8 @@ export async function POST(req: Request) {
 
     const decision = await decide({
       model,
-      checkModel: openai(CHECK_MODEL),
-      embeddingModel: openai.embedding(EMBEDDING_MODEL),
+      checkModel: models.check,
+      embeddingModel: models.embedding('query'),
       supabase,
       role,
       turns,
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
     const extras: Promise<Partial<ChatMetadata>> =
       role === 'agent'
         ? customerWording(model, decision.standalone, decision.chunks).then((customerWording) => ({ customerWording }))
-        : suggestFollowUps(openai(CHECK_MODEL), decision.standalone, decision.chunks).then((followUps) => ({ followUps }));
+        : suggestFollowUps(models.check, decision.standalone, decision.chunks).then((followUps) => ({ followUps }));
     return answerWithExtras(result.stream, metadata, extras, (text, extra) =>
       saveMessage(supabase, conversationId, 'assistant', text, sources, extra.customerWording ?? null, { id: messageId, kind: 'answer' }).then(
         () => messageId,
