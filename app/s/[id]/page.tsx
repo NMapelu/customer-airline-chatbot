@@ -4,11 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 import { Brand } from '@/components/brand';
 import { getSharedAnswer } from '@/lib/chat/shares';
 import { getServerEnv } from '@/lib/env';
-import { DISCLAIMER } from '@/lib/legal';
 import { AnswerText } from '../../(chat)/answer-text';
 
 // Shared links are private by intent: keep them out of search engines.
-export const metadata: Metadata = { title: 'Shared answer · KQ Policy Assistant', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'Shared answer · KQ Chatbot', robots: { index: false, follow: false } };
 
 const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -34,7 +33,7 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
         <p className="card p-4">This link has expired or was turned off by the person who shared it.</p>
       ) : (
         <>
-          <p className="text-sm text-muted">Answered on {longDate(shared.answeredAt)}. Policies change, so check the sources for the latest rules.</p>
+          <p className="text-sm text-muted">Answered on {longDate(shared.answeredAt)}. Rules change, so check the sources for the latest.</p>
           {shared.question && (
             <div className="flex justify-end">
               <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white">
@@ -68,7 +67,6 @@ export default async function SharedAnswerPage({ params }: PageProps<'/s/[id]'>)
           </div>
         </>
       )}
-      <p className="text-xs text-muted">{DISCLAIMER}</p>
       <Link href="/" className="btn btn-primary">
         Ask your own question
       </Link>
