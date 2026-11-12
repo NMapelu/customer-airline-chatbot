@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(22);
+select plan(24);
 
 insert into auth.users (id, email) values
   ('51111111-1111-1111-1111-111111111111', 'leaving@example.test'),
@@ -28,10 +28,13 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select throws_ok('select count(*) from public.audit_log', '42501', null, 'anon cannot read the audit log');
 select lives_ok($$select public.log_event('sign_in_failed', '196.201.214.0', null)$$, 'anon can record a failed sign-in');
 select lives_ok($$select public.log_event('mfa_enrolled')$$, 'anon asking for a signed-in event is ignored, not an error');
+select lives_ok($$select public.log_event('password_reset_requested', null, 'account abc')$$, 'anon can record a password reset request');
 reset role;
 select is((select count(*)::int from public.audit_log where event = 'sign_in_failed' and user_id is null and ip = '196.201.214.0'), 1,
   'the failed sign-in was recorded without a user');
 select is((select count(*)::int from public.audit_log where event = 'mfa_enrolled'), 0, 'an anonymous signed-in event was dropped');
+select is((select count(*)::int from public.audit_log where event = 'password_reset_requested' and user_id is null), 1,
+  'the reset request was recorded without a user');
 
 set local role authenticated;
 select set_config('request.jwt.claims',

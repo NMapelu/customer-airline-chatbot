@@ -21,7 +21,7 @@ export const signUpSchema = z
   .object({ email: emailSchema, password: passwordSchema, confirm: z.string(), consent: z.literal(true) })
   .refine((v) => v.password === v.confirm, { path: ['confirm'] });
 
-// An invited agent choosing their password (US-32).
+// An invited agent choosing their password (US-32), or anyone choosing a new one after a reset link.
 export const newPasswordSchema = z
   .object({ password: passwordSchema, confirm: z.string() })
   .refine((v) => v.password === v.confirm, { path: ['confirm'] });

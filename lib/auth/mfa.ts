@@ -12,7 +12,7 @@ export async function newTotpFactor(supabase: SupabaseClient): Promise<EnrolStar
   }
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: 'totp',
-    issuer: 'KQ Policy Assistant',
+    issuer: 'KQ Chatbot',
     // Names must be unique per user, and a replacement sits next to the old one for a moment.
     friendlyName: `Authenticator app (${new Date().toISOString().slice(0, 19).replace('T', ' ')})`,
   });

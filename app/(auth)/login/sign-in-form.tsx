@@ -16,7 +16,14 @@ export function SignInForm({ notice }: { notice?: string }) {
         </p>
       )}
       <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
-      <Field label="Password" name="password" type="password" autoComplete="current-password" required />
+      <div>
+        <Field label="Password" name="password" type="password" autoComplete="current-password" required />
+        <p className="mt-1.5 text-right text-sm">
+          <Link href="/forgot-password" className="link">
+            Forgot your password?
+          </Link>
+        </p>
+      </div>
       <FormError message={state?.error} />
       <Submit pending={pending}>Sign in</Submit>
       <p className="text-center text-sm text-muted">

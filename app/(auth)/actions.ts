@@ -4,14 +4,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { newTotpFactor, type EnrolStart } from '@/lib/auth/mfa';
-import { codeSchema, factorIdSchema, newPasswordSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
+import { codeSchema, emailSchema, factorIdSchema, newPasswordSchema, signInSchema, signUpSchema } from '@/lib/auth/schemas';
 import { HOME } from '@/lib/auth/access';
 import { PRIVACY_VERSION } from '@/lib/legal';
 import { TOO_MANY, tooManyAttempts } from '@/lib/security/attempts';
 import { audit } from '@/lib/security/audit';
 import { hashKey } from '@/lib/security/rate-limit';
 import { getAuthState } from '@/lib/supabase/auth-state';
-import { cameFromSetupLink, createClient } from '@/lib/supabase/server';
+import { cameFromResetLink, cameFromSetupLink, createClient } from '@/lib/supabase/server';
 
 // Sign-up, sign-in and MFA (overview §10.1, US-02 to US-04). Each action runs on the server with
 // the anon key; Supabase Auth checks the password and codes and sets the HTTP-only session cookies.
@@ -45,16 +45,13 @@ export async function signUp(_prev: FormState, form: FormData): Promise<FormStat
     return { error: 'Please choose a stronger password (see the rule under the field).', email };
   }
 
-  // The confirmation link comes back to this site. Supabase only sends it to an allow-listed
-  // URL (Auth → URL Configuration); anything else falls back to the Site URL.
-  const origin = (await headers()).get('origin');
   const supabase = await createClient();
   if (await tooManyAttempts(supabase)) return { error: TOO_MANY, email };
   const { error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: origin && URL.canParse(origin) ? `${new URL(origin).origin}/auth/confirm` : undefined,
+      emailRedirectTo: await confirmUrl(),
       // The record of consent (overview §11): which notice, and when.
       data: { privacy_consent: { version: PRIVACY_VERSION, at: new Date().toISOString() } },
     },
@@ -88,6 +85,56 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
   // Password only (AAL1): on to enrolment (first sign-in) or the code.
   const { status } = await getAuthState(supabase);
   redirect(status === 'error' ? '/login' : HOME[status]);
+}
+
+// The confirmation and reset links come back to this site. Supabase only sends them to an
+// allow-listed URL (Auth → URL Configuration); anything else falls back to the Site URL.
+async function confirmUrl(): Promise<string | undefined> {
+  const origin = (await headers()).get('origin');
+  return origin && URL.canParse(origin) ? `${new URL(origin).origin}/auth/confirm` : undefined;
+}
+
+// Forgotten password, step 1: email a reset link. The same answer whether or not the account
+// exists, so the form can't be used to find out who has one.
+export async function requestPasswordReset(_prev: FormState, form: FormData): Promise<FormState> {
+  const email = field(form, 'email').trim();
+  const parsed = emailSchema.safeParse(email);
+  if (!parsed.success) return { error: 'Please enter a valid email address.', email };
+
+  const supabase = await createClient();
+  if (await tooManyAttempts(supabase, parsed.data)) return { error: TOO_MANY, email };
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo: await confirmUrl() });
+  if (error) console.error('password reset email failed', error.code, error.message);
+  await audit(supabase, 'password_reset_requested', await headers(), `account ${(await hashKey(parsed.data)).slice(0, 12)}`);
+  return { done: true };
+}
+
+// Forgotten password, step 2: after the reset link and the authenticator code, choose a new
+// password. Every other device is signed out, in case someone else knew the old one.
+export async function setNewPassword(_prev: FormState, form: FormData): Promise<FormState> {
+  const parsed = newPasswordSchema.safeParse({
+    password: field(form, 'password'),
+    confirm: field(form, 'confirm'),
+  });
+  if (!parsed.success) {
+    return parsed.error.issues[0].path[0] === 'confirm'
+      ? { error: "The two passwords don't match." }
+      : { error: 'Please choose a stronger password (see the rule under the field).' };
+  }
+  const supabase = await createClient();
+  if (!(await cameFromResetLink(supabase))) redirect('/');
+  if (await tooManyAttempts(supabase, await currentUserId(supabase))) return { error: TOO_MANY };
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    if (error.code === 'same_password') return { error: "Please choose a password you haven't used here before." };
+    if (error.code === 'weak_password') return { error: 'Please choose a stronger password.' };
+    console.error('changing the password failed', error.code, error.message);
+    return { error: "We couldn't save the password. Please try again." };
+  }
+  await audit(supabase, 'password_changed', await headers());
+  const others = await supabase.auth.signOut({ scope: 'others' });
+  if (others.error) console.error('could not sign out other devices', others.error.message);
+  redirect('/');
 }
 
 // An invited agent chooses a password (US-32). Only for a session that came from the setup link
@@ -139,7 +186,7 @@ export async function finishEnrolment(_prev: FormState, form: FormData): Promise
     return { error: "That code didn't work. Check your app and try the newest code." };
   }
   await audit(supabase, 'mfa_enrolled', await headers());
-  redirect('/');
+  redirect((await cameFromResetLink(supabase)) ? '/new-password' : '/');
 }
 
 // Every later sign-in (US-04): the code from the enrolled authenticator.
@@ -158,7 +205,7 @@ export async function verifyCode(_prev: FormState, form: FormData): Promise<Form
     return { error: "That code didn't work. Check your app and try the newest code." };
   }
   await audit(supabase, 'mfa_verified', await headers());
-  redirect('/');
+  redirect((await cameFromResetLink(supabase)) ? '/new-password' : '/');
 }
 
 // US-14. Ends this browser's session only; other devices stay signed in.

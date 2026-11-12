@@ -15,7 +15,7 @@ const components: Components = {
   ol: ({ children }) => <ol className="my-1 list-decimal pl-5">{children}</ol>,
   a: ({ href, children }) =>
     href ? (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
+      <a href={href} target="_blank" rel="noopener noreferrer" className="link">
         {children}
       </a>
     ) : (
@@ -26,8 +26,8 @@ const components: Components = {
       <table className="border-collapse text-sm">{children}</table>
     </div>
   ),
-  th: ({ children }) => <th className="border border-gray-400 bg-gray-100 px-2 py-1 text-left font-semibold">{children}</th>,
-  td: ({ children }) => <td className="border border-gray-400 px-2 py-1 align-top">{children}</td>,
+  th: ({ children }) => <th className="border border-line bg-background px-2 py-1 text-left font-semibold">{children}</th>,
+  td: ({ children }) => <td className="border border-line px-2 py-1 align-top">{children}</td>,
 };
 
 export function AnswerText({ text }: { text: string }) {

@@ -28,14 +28,16 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
   }
 
   if (rating) {
-    return <p className="mt-2 text-xs text-gray-600">{rating === 'up' ? 'You found this helpful.' : 'Thanks, we will use this to improve.'}</p>;
+    return (
+      <p className="mt-2 text-xs text-ok">{rating === 'up' ? '✓ You found this helpful.' : '✓ Thanks, we will use this to improve.'}</p>
+    );
   }
 
-  const button = 'rounded border border-gray-400 bg-surface px-2 py-0.5 text-xs text-black hover:bg-gray-100 disabled:opacity-50';
+  const button = 'btn btn-outline btn-sm';
   return (
     <div className="mt-2 text-xs">
       <div className="flex items-center gap-2">
-        <span className="text-gray-600">Was this helpful?</span>
+        <span className="text-muted">Was this helpful?</span>
         <button type="button" className={button} disabled={pending} aria-label="Helpful" onClick={() => send('up', null)}>
           👍
         </button>
@@ -51,8 +53,8 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
         </button>
       </div>
       {choosing && (
-        <fieldset className="mt-2 rounded border border-gray-300 bg-surface p-2 text-black">
-          <legend className="px-1 text-gray-600">What went wrong? (optional)</legend>
+        <fieldset className="mt-2 rounded-lg border border-line bg-surface p-3 text-foreground">
+          <legend className="px-1 text-muted">What went wrong? (optional)</legend>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FEEDBACK_REASONS) as FeedbackReason[]).map((key) => (
               <button
@@ -60,24 +62,24 @@ export function Feedback({ messageId, initial }: { messageId: string; initial?: 
                 type="button"
                 aria-pressed={reason === key}
                 onClick={() => setReason(reason === key ? null : key)}
-                className={`rounded-full border px-2 py-0.5 ${reason === key ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-surface'}`}
+                className="chip text-xs"
               >
                 {FEEDBACK_REASONS[key]}
               </button>
             ))}
           </div>
           <div className="mt-2 flex gap-2">
-            <button type="button" className={button} disabled={pending} onClick={() => send('down', reason)}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={() => send('down', reason)}>
               Send
             </button>
-            <button type="button" className={button} disabled={pending} onClick={() => setChoosing(false)}>
+            <button type="button" className="btn btn-ok btn-sm" disabled={pending} onClick={() => setChoosing(false)}>
               Cancel
             </button>
           </div>
         </fieldset>
       )}
       {error && (
-        <p role="alert" className="mt-1 text-red-800">
+        <p role="alert" className="mt-1 text-brand">
           {error}
         </p>
       )}
