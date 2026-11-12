@@ -64,7 +64,7 @@ export default function PrivacyPage() {
         <h2 className="text-lg font-semibold">Who else processes your data</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>OpenAI</strong> receives your questions and the policy passages needed to answer them. Under its API
+            <strong>Google's Gemini</strong> receives your questions and the policy passages needed to answer them. Under its API
             terms it does not use them to train its models, but it may keep them for up to 30 days to monitor for abuse
             before deleting them.
           </li>
