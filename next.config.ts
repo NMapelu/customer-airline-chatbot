@@ -12,6 +12,6 @@ const nextConfig: NextConfig = {
 };
 
 // Lets `next dev` read Cloudflare bindings, including secrets from .dev.vars.
-initOpenNextCloudflareForDev();
+initOpenNextCloudflareForDev({ remoteBindings: !process.env.CI });
 
 export default nextConfig;

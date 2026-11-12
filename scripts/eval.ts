@@ -24,6 +24,10 @@ import sources from '../docs/sources.json';
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 const threshold = arg('threshold') ? Number(arg('threshold')) : SIMILARITY_THRESHOLD;
 const onlyCategories = arg('category')?.split(',');
+// Gemini's free tier allows only a few requests a minute, and each question makes about 4, so with
+// Gemini the run asks one question at a time and pauses between them. Override with
+// --concurrency=N and --pause=SECONDS.
+const DEFAULT_PACE = { openai: { concurrency: 4, pause: 0 }, google: { concurrency: 1, pause: 20 } } as const;
 if (!Number.isFinite(threshold)) throw new Error('--threshold must be a number');
 
 function fail(message: string): never {
@@ -42,7 +46,12 @@ function titleToSlug(): Map<string, string> {
   return map;
 }
 
-async function pool<T, R>(items: T[], size: number, work: (item: T, index: number) => Promise<R>): Promise<R[]> {
+async function pool<T, R>(
+  items: T[],
+  size: number,
+  work: (item: T, index: number) => Promise<R>,
+  pauseMs = 0,
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
@@ -50,6 +59,7 @@ async function pool<T, R>(items: T[], size: number, work: (item: T, index: numbe
       while (next < items.length) {
         const i = next++;
         out[i] = await work(items[i], i);
+        if (pauseMs > 0 && next < items.length) await new Promise((resolve) => setTimeout(resolve, pauseMs));
       }
     }),
   );
@@ -108,7 +118,11 @@ async function main() {
     .filter((q) => !onlyCategories || onlyCategories.includes(q.category));
   console.log(`Running ${questions.length} questions at threshold ${threshold}...`);
 
-  const results = await pool(questions, 4, async (q, i): Promise<EvalResult> => {
+  const pace = DEFAULT_PACE[env.AI_PROVIDER];
+  const concurrency = arg('concurrency') ? Math.max(1, Number(arg('concurrency'))) : pace.concurrency;
+  const pauseSeconds = arg('pause') ? Math.max(0, Number(arg('pause'))) : pace.pause;
+  if (pauseSeconds > 0) console.log(`${concurrency} at a time, pausing ${pauseSeconds}s between questions.`);
+  const results = await pool(questions, concurrency, async (q, i): Promise<EvalResult> => {
     const base = { id: q.id, category: q.category, topSimilarity: null, sourceSlugs: [], retrievedStaff: false, answer: null, grounded: null };
     const role: Role = q.audience === 'agent' ? 'agent' : 'customer';
     if (role === 'agent' && !agentUser) return { ...base, kind: 'skipped', note: 'no agent test user (see the README)' };
@@ -116,7 +130,7 @@ async function main() {
       const supabase = await clientFor(role);
       const turns: Turn[] = [...(q.history ?? []), { role: 'user', text: q.question }];
       const decision = await decide({ model, checkModel, embeddingModel, supabase, role, turns, threshold });
-      if (decision.kind === 'unavailable') return { ...base, kind: 'error', note: 'OpenAI could not be reached' };
+      if (decision.kind === 'unavailable') return { ...base, kind: 'error', note: 'the AI provider could not be reached (see the log above)' };
       if (decision.kind === 'refusal') return { ...base, kind: 'refusal' };
       const topSimilarity = Math.max(...decision.retrieved.map((c) => c.similarity), 0);
       const retrievedStaff = decision.retrieved.some((c) => c.audience === 'staff');
@@ -150,7 +164,7 @@ async function main() {
     } finally {
       if ((i + 1) % 20 === 0) console.log(`  ${i + 1}/${questions.length}`);
     }
-  });
+  }, pauseSeconds * 1000);
 
   writeFileSync('eval/results.jsonl', results.map((r) => JSON.stringify(r)).join('\n') + '\n');
   writeFileSync('eval/report.md', report(questions, results));
