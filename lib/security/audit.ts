@@ -24,7 +24,9 @@ export type AuditEvent =
   | 'staff_content_blocked'
   | 'admin_granted'
   | 'admin_removed'
-  | 'admin_viewed';
+  | 'admin_viewed'
+  | 'password_reset_requested'
+  | 'password_changed';
 
 // Best effort: a failed write is logged on the server and never blocks the user's request.
 export async function audit(supabase: SupabaseClient, event: AuditEvent, headers: Headers | null, detail?: string): Promise<void> {
