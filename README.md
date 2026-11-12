@@ -1,4 +1,4 @@
-# KQ Policy Assistant
+# KQ Chatbot
 
 > **Disclaimer:** this is an independent academic project. It is not an official Kenya Airways service and is not affiliated with or endorsed by Kenya Airways.
 
@@ -125,6 +125,7 @@ Everyone signs up with an email and password, confirms the email, and must set u
 - Pages, Server Actions and `/api/chat` check AAL2 again on the server, and every RLS policy requires it too.
 - Session cookies are HTTP-only, SameSite=Lax and Secure (except under `npm run dev`). The browser never talks to Supabase directly; all auth calls go through Server Actions.
 - MFA can't be turned off. In **Settings**, users can replace their authenticator after entering a code from the current one.
+- **Forgotten password:** *Forgot your password?* on the sign-in page emails a reset link. The link only works in the same browser, and the user must also enter their authenticator code before choosing a new password, so the email alone can't take over an account. Saving the new password signs out every other device.
 - **Lost authenticator (manual recovery):** after checking the person's identity, the project owner deletes their authenticator in the Supabase dashboard (**Authentication → Users → the user → Multi-factor authentication**). At their next sign-in they set up a new one.
 
 Conversations are saved and listed in the sidebar, newest first. Users can open, rename and delete them; deleting is permanent. Questions are saved with personal details masked.
