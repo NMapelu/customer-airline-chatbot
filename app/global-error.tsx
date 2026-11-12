@@ -6,7 +6,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
   return (
     <html lang="en">
       <body>
-        <title>Something went wrong · KQ Policy Assistant</title>
+        <title>Something went wrong · KQ Chatbot</title>
         <h1>Sorry, something went wrong</h1>
         <p>Please try again. If it keeps happening, come back a little later.</p>
         {error.digest && <p>Reference: {error.digest}</p>}

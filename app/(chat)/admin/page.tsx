@@ -7,7 +7,7 @@ import { getInsights } from '@/lib/admin/insights';
 import { requireAal2 } from '@/lib/supabase/server';
 import { AnswerText } from '../answer-text';
 
-export const metadata: Metadata = { title: 'Insights · KQ Policy Assistant', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'Insights · KQ Chatbot', robots: { index: false, follow: false } };
 
 const percent = (part: number, whole: number) => (whole === 0 ? '–' : `${Math.round((part / whole) * 100)}%`);
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -94,7 +94,7 @@ export default async function AdminPage() {
         )}
       </Panel>
 
-      <Panel title="Knowledge gaps" description="Escalated questions, grouped when they share most of their words. Add policies for the top ones.">
+      <Panel title="Knowledge gaps" description="Escalated questions, grouped when they share most of their words. Add information for the top ones.">
         {gaps.length === 0 ? (
           <p className="text-sm text-muted">No escalations.</p>
         ) : (

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Brand } from '@/components/brand';
 import { DISCLAIMER, PRIVACY_VERSION } from '@/lib/legal';
 
-export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistant' };
+export const metadata: Metadata = { title: 'Privacy notice · KQ Chatbot' };
 
 // Overview §11. Public, so it can be read before signing up.
 export default function PrivacyPage() {

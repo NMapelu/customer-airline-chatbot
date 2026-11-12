@@ -11,7 +11,7 @@ import { DeleteAccount } from './delete-account';
 import { ReplaceAuthenticator } from './replace-authenticator';
 import { SharedLinks } from './shared-links';
 
-export const metadata: Metadata = { title: 'Settings · KQ Policy Assistant' };
+export const metadata: Metadata = { title: 'Settings · KQ Chatbot' };
 
 const longDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
