@@ -1,5 +1,4 @@
-// The app's name with a small plane mark. Not the airline's logo: this is an independent
-// project, and the disclaimer says so on every page.
+// The app's name with a small plane mark. Not the airline's logo: this is an independent project.
 export function Brand({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
   return (
     <span className="flex items-center gap-2">
@@ -9,8 +8,8 @@ export function Brand({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
         </svg>
       </span>
       <span className="leading-tight">
-        <span className={`block text-sm font-bold ${tone === 'dark' ? 'text-white' : 'text-foreground'}`}>KQ Policy Assistant</span>
-        <span className={`block text-[11px] ${tone === 'dark' ? 'text-zinc-400' : 'text-muted'}`}>Travel policy answers with sources</span>
+        <span className={`block text-sm font-bold ${tone === 'dark' ? 'text-white' : 'text-foreground'}`}>KQ Chatbot</span>
+        <span className={`block text-[11px] ${tone === 'dark' ? 'text-zinc-400' : 'text-muted'}`}>Your travel questions answered</span>
       </span>
     </span>
   );
