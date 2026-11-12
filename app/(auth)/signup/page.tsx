@@ -41,7 +41,7 @@ export default function SignUpPage() {
       </div>
       <Field label="Confirm password" name="confirm" type="password" autoComplete="new-password" required />
       <p className="text-xs text-muted">
-        You&apos;ll also need an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.
+        You&apos;ll also need an authenticator app (Microsoft Authenticator) on your phone.
       </p>
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="consent" required className="mt-1 accent-[#c8102e]" />
