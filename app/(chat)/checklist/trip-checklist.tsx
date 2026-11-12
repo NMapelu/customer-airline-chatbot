@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { DISCLAIMER } from '@/lib/legal';
 import type { ChecklistSection } from '@/lib/rag/checklist';
 import type { ContactDetails } from '@/lib/rag/prompts';
 
@@ -45,7 +44,7 @@ export function TripChecklist() {
     <div className="mx-auto w-full max-w-3xl flex-1 space-y-5 overflow-y-auto px-4 py-6 print:overflow-visible">
       <PageHeader
         title="Pre-travel checklist"
-        description="Tell us about your trip and get one checklist from Kenya Airways policies, with the source of every item."
+        description="Tell us about your trip and get one checklist that answers your Kenya Airways questions, with the source of every item."
       />
       <form
         className="card card-brand space-y-3 p-4 print:hidden"
@@ -103,7 +102,7 @@ export function TripChecklist() {
       {result?.kind === 'checklist' && (
         <section aria-label="Your checklist" className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-muted">Built on {today()} from Kenya Airways policies.</p>
+            <p className="text-sm text-muted">Built on {today()} from Kenya Airways information.</p>
             <button type="button" onClick={() => window.print()} className="btn btn-outline print:hidden">
               Save as PDF
             </button>
@@ -157,7 +156,6 @@ export function TripChecklist() {
               )}
             </div>
           )}
-          <p className="text-xs text-muted">{DISCLAIMER}</p>
         </section>
       )}
     </div>
