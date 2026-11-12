@@ -1,25 +1,49 @@
 import Link from 'next/link';
+import { Brand } from '@/components/brand';
+import { ShieldIcon } from '@/components/icons';
 import { DISCLAIMER } from '@/lib/legal';
 
-// Sign-in, sign-up and MFA pages: one narrow card, centred, with what the assistant covers and
-// the disclaimer (overview §13) underneath.
+// Sign-in, sign-up and MFA pages: a dark panel saying what the assistant does, next to one form
+// card. On phones the panel shrinks to a header above the card. The disclaimer (overview §13) is
+// always visible.
 export default function AuthLayout({ children }: LayoutProps<'/'>) {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-300 bg-surface p-6 text-black shadow">
-        <p className="mb-4 text-sm font-semibold text-blue-700">KQ Policy Assistant</p>
-        {children}
-      </div>
-      <footer className="w-full max-w-sm space-y-2 text-xs text-gray-600">
-        <p>
-          Answers questions about Kenya Airways&apos; published policies, such as baggage, check-in, refunds and special
-          assistance, and shows the source of each answer.
+    <main className="grid min-h-dvh md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <section className="sidebar flex flex-col justify-between gap-8 px-6 py-8 md:px-10 md:py-12">
+        <Brand />
+        <div className="hidden space-y-5 md:block">
+          <h2 className="max-w-sm text-3xl font-semibold leading-tight text-white">
+            Kenya Airways policies, answered with the source every time.
+          </h2>
+          <ul className="max-w-sm space-y-3 text-sm text-zinc-300">
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
+              Baggage, check-in, refunds, special assistance and more, from the published policies.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
+              Questions it can&apos;t answer go to Kenya Airways customer service, never a guess.
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#c8102e]" aria-hidden="true" />
+              Call-centre agents get their internal procedures too, by invitation.
+            </li>
+          </ul>
+        </div>
+        <p className="hidden max-w-sm items-start gap-2 text-xs text-zinc-400 md:flex">
+          <ShieldIcon />
+          <span>Every account uses a code from an authenticator app. Sign-in activity is recorded for security.</span>
         </p>
-        <p>{DISCLAIMER}</p>
-        <Link href="/privacy" className="text-blue-700 underline">
-          Privacy notice
-        </Link>
-      </footer>
+      </section>
+      <section className="flex flex-col items-center justify-center gap-5 px-4 py-8">
+        <div className="card w-full max-w-sm p-6 sm:p-8">{children}</div>
+        <footer className="w-full max-w-sm space-y-2 text-xs text-muted">
+          <p>{DISCLAIMER}</p>
+          <Link href="/privacy" className="link">
+            Privacy notice
+          </Link>
+        </footer>
+      </section>
     </main>
   );
 }
