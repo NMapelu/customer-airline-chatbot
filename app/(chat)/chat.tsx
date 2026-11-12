@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { SendIcon } from '@/components/icons';
-import { DISCLAIMER } from '@/lib/legal';
 import { isStale, STALE_AFTER_MONTHS } from '@/lib/rag/passages';
 import type { ChatMessage, Role, Source } from '@/lib/rag/types';
 import { AnswerText } from './answer-text';
@@ -118,14 +117,14 @@ function CustomerWording({ text }: { text: string | null }) {
     return (
       <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
         <p className="font-semibold">Customer-ready wording</p>
-        <p>None for this answer: no public policy covers it. Don&apos;t read the internal steps to the caller.</p>
+        <p>None for this answer: no public information covers it. Don&apos;t read the internal steps to the caller.</p>
       </div>
     );
   }
   return (
     <div className="mt-3 rounded-lg border border-ok bg-ok-soft p-3 text-sm text-foreground">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-ok">Customer-ready wording (public policy only)</p>
+        <p className="text-xs font-semibold text-ok">Customer-ready wording (public information only)</p>
         <CopyButton text={text} className="btn btn-ok btn-sm" />
       </div>
       <p className="mt-1">{text}</p>
@@ -188,8 +187,8 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
             </h1>
             <p className="mt-2 text-sm text-muted">
               {role === 'agent'
-                ? "Describe the caller's situation, or start with a common call. Answers use public policies and internal procedures."
-                : 'Ask about a Kenya Airways policy, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
+                ? "Describe the caller's situation, or start with a common call. Answers use public information and internal procedures."
+                : 'Ask a question about your Kenya Airways trip, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
             </p>
           </div>
         )}
@@ -220,7 +219,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
               }
             >
               {m.role === 'assistant' && (
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Policy Assistant</p>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Chatbot</p>
               )}
               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
               {m.role === 'user' ? (
@@ -276,7 +275,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                 <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
                 <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
               </span>
-              Checking the policies…
+              Finding your answer…
             </div>
           </div>
         )}
@@ -301,7 +300,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
             value={input}
             maxLength={1000}
             aria-label="Your question"
-            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask about a Kenya Airways policy...'}
+            placeholder={role === 'agent' ? "Describe the caller's situation..." : 'Ask a question about your trip...'}
             onChange={(e) => setInput(e.target.value)}
             disabled={busy}
           />
@@ -311,7 +310,7 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           </button>
         </div>
         <p className="mt-2 px-1 text-center text-xs text-muted">
-          Please don&apos;t share booking references, passport, card or medical details. {DISCLAIMER}{' '}
+          Please don&apos;t share booking references, passport, card or medical details.{' '}
           <Link href="/privacy" className="underline">
             Privacy
           </Link>
