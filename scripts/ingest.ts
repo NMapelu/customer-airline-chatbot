@@ -1,23 +1,25 @@
 // Loads the knowledge base into Supabase (overview §9.2).
 //
 //   npm run ingest              fetch KQ pages, check everything, embed what changed, load it
+//   (set AI_PROVIDER in .env.ingest to the same value as the app's)
 //   npm run ingest -- --dry-run fetch and check, then print the plan without embedding or writing
 //   npm run ingest -- --skip-fetch   use the pages already in docs/public/
 //
 // Secrets come from .env.ingest (gitignored), never from .env.local: the Cloudflare build bundles
 // .env* files into the Worker, and the service-role key must never reach the web app.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createOpenAI } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
 import { embedMany } from 'ai';
 import { z } from 'zod';
+import { createModels, MODEL_NAMES } from '../lib/ai/models';
+import { AI_PROVIDERS, KEY_FOR, type AiProvider } from '../lib/ai/provider';
 import { chunkMarkdown } from '../lib/rag/chunk';
 import { type Audience, type KbDocument, parseDocument, planIngest } from '../lib/rag/documents';
 import { supabaseUrlSchema } from '../lib/supabase/url';
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const skipFetch = args.has('--skip-fetch');
@@ -33,6 +35,17 @@ function run(script: string, scriptArgs: string[], what: string) {
   if (result.status !== 0) fail(`${what} failed, so nothing was loaded.`);
 }
 
+// An empty line in .env.ingest (KEY=) counts as not set.
+const optionalKey = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
+
+// The hash stored for a document also records which embedding model made its chunks, so switching
+// AI_PROVIDER re-embeds every document instead of leaving passages the new model can't search.
+// OpenAI keeps the plain content hash, so documents loaded before this change count as unchanged.
+function storedHash(contentHash: string, provider: AiProvider): string {
+  if (provider === 'openai') return contentHash;
+  return createHash('sha256').update(`${contentHash}|${MODEL_NAMES[provider].embedding}`).digest('hex');
+}
+
 function loadEnv() {
   if (existsSync('.env.ingest')) {
     process.loadEnvFile('.env.ingest');
@@ -43,7 +56,13 @@ function loadEnv() {
   const schema = z.object({
     SUPABASE_URL: supabaseUrlSchema,
     SUPABASE_SERVICE_ROLE_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
-    OPENAI_API_KEY: z.string({ error: 'is required' }).min(1, 'is required'),
+    // Must match the app's AI_PROVIDER: questions are only comparable with passages embedded by the same model.
+    AI_PROVIDER: z.enum(AI_PROVIDERS).default('openai'),
+    OPENAI_API_KEY: optionalKey,
+    GOOGLE_GENERATIVE_AI_API_KEY: optionalKey,
+  }).superRefine((env, ctx) => {
+    const key = KEY_FOR[env.AI_PROVIDER];
+    if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `is required when AI_PROVIDER is ${env.AI_PROVIDER}` });
   });
   const parsed = schema.safeParse(process.env);
   if (!parsed.success) {
@@ -83,12 +102,14 @@ async function main() {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  const embeddingModel = createModels(env).embedding('document');
+  const stamped = docs.map((d) => ({ ...d, contentHash: storedHash(d.contentHash, env.AI_PROVIDER) }));
+  console.log(`Embedding with ${MODEL_NAMES[env.AI_PROVIDER].embedding} (AI_PROVIDER=${env.AI_PROVIDER}).`);
 
   // 3. Compare with what is already loaded.
   const { data: existing, error: readError } = await supabase.from('documents').select('slug, content_hash');
   if (readError) fail(`could not read the documents table: ${readError.message}`);
-  const plan = planIngest(docs, new Map(existing.map((row) => [row.slug as string, row.content_hash as string])));
+  const plan = planIngest(stamped, new Map(existing.map((row) => [row.slug as string, row.content_hash as string])));
 
   // 4. Embed and load each new or changed document in one transaction per document.
   for (const doc of [...plan.added, ...plan.updated]) {
@@ -96,7 +117,7 @@ async function main() {
     if (chunks.length === 0) fail(`${doc.audience}/${doc.slug} has no text to load.`);
     // The title and section go into the embedded text so a chunk can be found by topic.
     const { embeddings } = await embedMany({
-      model: openai.embedding(EMBEDDING_MODEL),
+      model: embeddingModel,
       values: chunks.map((c) => `${doc.title}\n${c.content}`),
     });
     const { error } = await supabase.rpc('replace_document_chunks', {

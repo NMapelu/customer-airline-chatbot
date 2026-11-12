@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Brand } from '@/components/brand';
 import { DISCLAIMER, PRIVACY_VERSION } from '@/lib/legal';
 
 export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistant' };
@@ -7,12 +8,18 @@ export const metadata: Metadata = { title: 'Privacy notice · KQ Policy Assistan
 // Overview §11. Public, so it can be read before signing up.
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto w-full max-w-2xl space-y-5 p-6 text-sm leading-6">
-      <Link href="/" className="text-blue-700 underline">
-        Back to the assistant
-      </Link>
-      <h1 className="text-2xl font-semibold">Privacy notice</h1>
-      <p className="text-gray-600">Version {PRIVACY_VERSION}</p>
+    <>
+    <header className="sidebar px-4 py-3">
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+        <Brand />
+        <Link href="/" className="nav-link">
+          Back to the assistant
+        </Link>
+      </div>
+    </header>
+    <main className="card mx-auto my-6 w-[calc(100%-2rem)] max-w-3xl space-y-5 p-6 text-sm leading-6 sm:p-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Privacy notice</h1>
+      <p className="text-muted">Version {PRIVACY_VERSION}</p>
       <p>{DISCLAIMER}</p>
 
       <section className="space-y-2">
@@ -94,5 +101,6 @@ export default function PrivacyPage() {
         </p>
       </section>
     </main>
+    </>
   );
 }

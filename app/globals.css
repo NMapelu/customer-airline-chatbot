@@ -5,6 +5,14 @@
   --color-foreground: var(--foreground);
   /* Cards, inputs and buttons. White in light mode; `white` itself stays white for text on blue. */
   --color-surface: var(--surface);
+  /* The look of the app: a dark sidebar, red for actions and green for confirmed or safe things. */
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-ink: var(--ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -17,9 +25,25 @@
  */
 :root {
   color-scheme: light dark;
-  --background: light-dark(#ffffff, #0a0a0a);
-  --foreground: light-dark(#171717, #ededed);
-  --surface: light-dark(#ffffff, oklch(21% 0.034 264.665));
+  --background: light-dark(#f5f5f6, #0c0d10);
+  --foreground: light-dark(#18181b, #ececee);
+  --surface: light-dark(#ffffff, #16181d);
+  /* Red for links and highlights. Solid red buttons keep the same red in both modes, for contrast with white text. */
+  --brand: light-dark(#c8102e, #ff7385);
+  --brand-solid: #c8102e;
+  --brand-solid-hover: #a10c24;
+  --brand-soft: light-dark(#fdecef, #3b1219);
+  --ok: light-dark(#15803d, #4ade80);
+  --ok-soft: light-dark(#ecfdf3, #0f2a1b);
+  --ok-line: light-dark(#86efac, #166534);
+  --line: light-dark(#e4e4e7, #2a2d35);
+  --muted: light-dark(#52525b, #a1a1aa);
+  /* The sidebar is dark in both modes. */
+  --ink: #111114;
+  --ink-hover: #1f1f24;
+  --ink-line: #2c2c33;
+  --ink-text: #f4f4f5;
+  --ink-muted: #a1a1aa;
   --color-gray-50: light-dark(oklch(98.5% 0.002 247.839), oklch(21% 0.034 264.665));
   --color-gray-100: light-dark(oklch(96.7% 0.003 264.542), oklch(27.8% 0.033 256.848));
   --color-gray-200: light-dark(oklch(92.8% 0.006 264.531), oklch(27.8% 0.033 256.848));
@@ -69,7 +93,234 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/*
+ * Shared building blocks, so every page looks the same. Plain classes rather than long lists of
+ * utilities in each component; Tailwind utilities on the same element still win.
+ */
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.875rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+  /* A card with a green edge on top, for figures and confirmed results. */
+  .card-ok {
+    border-top: 3px solid var(--ok);
+  }
+  .card-brand {
+    border-top: 3px solid var(--brand-solid);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+  }
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .btn:focus-visible,
+  .chip:focus-visible,
+  .nav-link:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--brand-solid);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--brand-solid-hover);
+  }
+  .btn-outline {
+    background: var(--surface);
+    border-color: var(--line);
+    color: var(--foreground);
+  }
+  .btn-outline:hover:not(:disabled) {
+    border-color: var(--muted);
+  }
+  /* Outlined in green: the safe way out of a form, like the reference design's Cancel and Clear. */
+  .btn-ok {
+    background: var(--surface);
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+  .btn-ok:hover:not(:disabled) {
+    background: var(--ok-soft);
+  }
+  .btn-danger {
+    background: var(--surface);
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: var(--brand-soft);
+  }
+  .btn-sm {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8125rem;
+    text-align: left;
+    color: var(--foreground);
+    cursor: pointer;
+    transition: border-color 120ms, background-color 120ms;
+  }
+  .chip:hover:not(:disabled) {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .chip[aria-pressed='true'] {
+    border-color: var(--brand-solid);
+    background: var(--brand-solid);
+    color: #fff;
+  }
+
+  .input {
+    display: block;
+    width: 100%;
+    border-radius: 0.6rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+  }
+  .input:focus {
+    outline: 2px solid var(--brand);
+    outline-offset: -1px;
+    border-color: transparent;
+  }
+
+  .link {
+    color: var(--brand);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.05rem 0.55rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.1rem;
+    white-space: nowrap;
+  }
+  .badge-ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+    border: 1px solid var(--ok-line);
+  }
+  .badge-brand {
+    background: var(--brand-soft);
+    color: var(--brand);
+    border: 1px solid var(--brand);
+  }
+  .badge-solid {
+    background: var(--brand-solid);
+    color: #fff;
+  }
+  .badge-muted {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+
+  .notice {
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+  .notice-ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+    border: 1px solid var(--ok-line);
+  }
+  .notice-error {
+    background: var(--brand-soft);
+    color: var(--brand);
+    border: 1px solid var(--brand);
+  }
+
+  /* The dark sidebar. */
+  .sidebar {
+    background: var(--ink);
+    color: var(--ink-text);
+  }
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--ink-muted);
+    transition: background-color 120ms, color 120ms;
+  }
+  .nav-link:hover {
+    background: var(--ink-hover);
+    color: var(--ink-text);
+  }
+  .nav-link[aria-current='page'] {
+    background: var(--brand-solid);
+    color: #fff;
+  }
+  .sidebar-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border-radius: 0.6rem;
+    border: 1px solid var(--ink-line);
+    background: var(--ink-hover);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8125rem;
+    color: var(--ink-text);
+  }
+  .sidebar-input::placeholder {
+    color: var(--ink-muted);
+  }
+  .sidebar-input:focus {
+    outline: 2px solid var(--brand-solid);
+    outline-offset: -1px;
+  }
+}
+
+/* People who ask for less motion get none. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* Printed checklists (overview §7.10) are always black on white, whatever the screen mode. */
