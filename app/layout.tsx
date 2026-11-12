@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KQ Policy Assistant",
+  title: "KQ Chatbot",
   description:
-    "A policy assistant for Kenya Airways passengers and call-centre agents. Independent academic project, not affiliated with Kenya Airways.",
+    "Answers to Kenya Airways travel questions for passengers and call-centre agents. Independent academic project, not affiliated with Kenya Airways.",
 };
 
 // Every page is rendered per request, so it can carry that request's CSP nonce (proxy.ts).
