@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { HOME } from '../auth/access';
+import { HOME, openedResetLink } from '../auth/access';
 import { getServerEnv } from '../env';
 import type { Role } from '../rag/types';
 import { COOKIE_OPTIONS, getAuthState } from './auth-state';
@@ -49,4 +49,13 @@ export async function cameFromSetupLink(supabase: SupabaseClient): Promise<boole
   if (error || !data) return false;
   const hourAgo = Date.now() / 1000 - 3600;
   return data.currentAuthenticationMethods.some((m) => typeof m === 'object' && m.method === 'otp' && m.timestamp > hourAgo);
+}
+
+// True when a fully signed-in session (password reset link plus authenticator code) opened the
+// reset link in the last 15 minutes. Only then may the password be changed without the old one
+// (app/(auth)/new-password). A stolen session without the link can't use this.
+export async function cameFromResetLink(supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || !data || data.currentLevel !== 'aal2') return false;
+  return openedResetLink(data.currentAuthenticationMethods);
 }

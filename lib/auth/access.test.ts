@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { accessFor, agentNeedsCode, type AuthStatus } from './access';
+import { accessFor, agentNeedsCode, openedResetLink, type AuthStatus } from './access';
 
 const ALL: AuthStatus[] = ['signed_out', 'needs_enrol', 'needs_verify', 'aal2', 'error'];
 
@@ -29,7 +29,7 @@ test('a path that only looks like the API is still a protected page', () => {
 });
 
 test('sign-in pages are for signed-out users, and stay open when the check fails', () => {
-  for (const path of ['/login', '/signup']) {
+  for (const path of ['/login', '/signup', '/forgot-password']) {
     assert.deepEqual(accessFor(path, 'signed_out'), { action: 'allow' });
     assert.deepEqual(accessFor(path, 'error'), { action: 'allow' });
     assert.deepEqual(accessFor(path, 'aal2'), { action: 'redirect', to: '/' });
@@ -87,4 +87,15 @@ test('an agent enters a new code once the last one is over 8 hours old', () => {
   // No code in this session at all (fail-safe).
   assert.equal(agentNeedsCode([{ method: 'password', timestamp: at(0) }], now), true);
   assert.equal(agentNeedsCode([], now), true);
+});
+
+test('a new password can be chosen only within 15 minutes of opening a reset link', () => {
+  const now = Date.UTC(2026, 9, 22, 12);
+  const at = (minutesAgo: number) => Math.floor((now - minutesAgo * 60 * 1000) / 1000);
+  assert.equal(openedResetLink([{ method: 'recovery', timestamp: at(2) }, { method: 'totp', timestamp: at(1) }], now), true);
+  assert.equal(openedResetLink([{ method: 'recovery', timestamp: at(16) }, { method: 'totp', timestamp: at(1) }], now), false);
+  // A normal sign-in, or an older token that lists bare method names, never counts.
+  assert.equal(openedResetLink([{ method: 'password', timestamp: at(1) }, { method: 'totp', timestamp: at(1) }], now), false);
+  assert.equal(openedResetLink(['recovery'], now), false);
+  assert.equal(openedResetLink([], now), false);
 });

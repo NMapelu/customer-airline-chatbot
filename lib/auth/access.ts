@@ -22,7 +22,7 @@ export const HOME: Record<Exclude<AuthStatus, 'error'>, string> = {
 // answers (/s/<id>, overview §7.15), which show only what the owner chose to share.
 const PUBLIC_PAGES = new Set(['/privacy']);
 const isSharedAnswer = (pathname: string) => /^\/s\/[^/]+$/.test(pathname);
-const SIGNED_OUT_PAGES = new Set(['/login', '/signup']);
+const SIGNED_OUT_PAGES = new Set(['/login', '/signup', '/forgot-password']);
 // /welcome is where an invited agent chooses a password, before setting up an authenticator.
 // The page also checks that the session came from the invitation link (app/(auth)/welcome).
 const MFA_PAGES: Record<string, AuthStatus> = { '/mfa/enroll': 'needs_enrol', '/welcome': 'needs_enrol', '/mfa/verify': 'needs_verify' };
@@ -40,6 +40,16 @@ export type SignInMethod = string | { method: string; timestamp: number };
 export function agentNeedsCode(methods: SignInMethod[], now = Date.now()): boolean {
   const newest = Math.max(0, ...methods.flatMap((m) => (typeof m === 'object' && m.method === 'totp' ? [m.timestamp * 1000] : [])));
   return now - newest > AGENT_CODE_MAX_HOURS * 3600 * 1000;
+}
+
+// A password reset link signs the user in with the method 'recovery'. They may choose a new password
+// only after they also enter their authenticator code, and only within 15 minutes of opening the link.
+export const RESET_WINDOW_MINUTES = 15;
+
+export function openedResetLink(methods: SignInMethod[], now = Date.now()): boolean {
+  return methods.some(
+    (m) => typeof m === 'object' && m.method === 'recovery' && now - m.timestamp * 1000 <= RESET_WINDOW_MINUTES * 60 * 1000,
+  );
 }
 
 const allow: Access = { action: 'allow' };
