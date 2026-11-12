@@ -1,6 +1,12 @@
 # Local server secrets, used by `npm run dev` and `npm run preview`. Copy to .dev.vars.
 # In production, set each one with `npx wrangler secret put <NAME>`.
+# Which AI models to use: openai (default) or google (Gemini). Fill in only that provider's key.
+# After changing it, run `npm run ingest` with the same AI_PROVIDER in .env.ingest.
+AI_PROVIDER=openai
 OPENAI_API_KEY=
+GOOGLE_GENERATIVE_AI_API_KEY=
+# Optional: another Gemini model for answers and checks (lib/ai/models.ts has the default).
+GEMINI_MODEL=
 
 # Supabase: Project Settings → Data API → Project URL (ends in .supabase.co, nothing after it),
 # and Project Settings → API Keys → the anon / publishable key. Never the service-role key here.

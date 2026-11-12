@@ -1,8 +1,8 @@
-import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { getChatSession } from '@/lib/chat-session';
 import { buildChecklist } from '@/lib/rag/checklist';
-import { CHAT_MODEL, CHECK_MODEL, EMBEDDING_MODEL, MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
+import { createModels } from '@/lib/ai/models';
+import { MAX_QUESTION_CHARS, SIMILARITY_THRESHOLD } from '@/lib/rag/config';
 import { getContactDetails } from '@/lib/rag/contact';
 import { maskPii } from '@/lib/rag/pii';
 import { audit } from '@/lib/security/audit';
@@ -40,15 +40,15 @@ export async function POST(req: Request) {
   if (!trip) return jsonError(400, 'Please describe your trip.');
   if (trip.length > MAX_QUESTION_CHARS) return jsonError(413, `Please keep it under ${MAX_QUESTION_CHARS} characters.`);
 
-  // R7: personal details are masked before anything reaches OpenAI.
+  // R7: personal details are masked before anything reaches the AI provider.
   const { text: masked, found } = maskPii(trip);
   const { env, supabase } = session;
-  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  const models = createModels(env);
   try {
     const checklist = await buildChecklist({
-      model: openai(CHAT_MODEL),
-      checkModel: openai(CHECK_MODEL),
-      embeddingModel: openai.embedding(EMBEDDING_MODEL),
+      model: models.chat,
+      checkModel: models.check,
+      embeddingModel: models.embedding('query'),
       supabase,
       trip: masked,
       threshold: SIMILARITY_THRESHOLD,
