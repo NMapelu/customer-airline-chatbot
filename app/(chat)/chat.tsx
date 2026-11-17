@@ -285,7 +285,7 @@ export function Chat({
                 disabled={busy}
                 onClick={() => sendMessage({ text: t.question })}
                 style={{ animationDelay: `${120 + i * 70}ms` }}
-                className={`pop-in lift card group flex items-center gap-3 p-3 text-left ${
+                className={`pop-in lift glass group flex items-center gap-3 rounded-2xl p-3 text-left ${
                   t.tone === 'red' ? 'hover:border-[#c8102e]' : 'hover:border-[#15803d]'
                 }`}
               >
@@ -335,7 +335,7 @@ export function Chat({
               className={
                 m.role === 'user'
                   ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-[#e11d48] to-[#a10c24] px-4 py-2.5 text-white shadow-md shadow-[#c8102e]/20'
-                  : 'card w-full max-w-[92%] rounded-2xl rounded-tl-md px-4 py-3 shadow-sm'
+                  : 'glass w-full max-w-[92%] rounded-2xl rounded-tl-md px-4 py-3'
               }
             >
               {m.role === 'assistant' && (
@@ -395,7 +395,7 @@ export function Chat({
         {busy && messages.at(-1)?.role === 'user' && (
           <div className="mx-auto flex max-w-3xl gap-2.5" role="status">
             <BotAvatar />
-            <div className="card flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-muted">
+            <div className="glass flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-muted">
               <span className="relative h-4 w-14 overflow-hidden" aria-hidden="true">
                 <span className="absolute inset-x-0 top-1/2 border-t-2 border-dashed border-[#15803d]/50" />
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#c8102e" className="fly-across absolute top-0 left-0 rotate-90" focusable="false">
@@ -421,7 +421,7 @@ export function Chat({
         }}
         className="mx-auto w-full max-w-3xl px-4 pb-4"
       >
-        <div className="card flex items-center gap-2 rounded-full p-1.5 pl-3 shadow-xl shadow-black/5 transition focus-within:ring-2 focus-within:ring-[#15803d]">
+        <div className="glass flex items-center gap-2 rounded-full p-1.5 pl-3 transition focus-within:ring-2 focus-within:ring-[#15803d]">
           <span className="text-lg" aria-hidden="true">
             ✈️
           </span>
