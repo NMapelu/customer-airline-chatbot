@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
+import { Switch } from '@/components/switch';
 import { appearanceFrom } from '@/lib/appearance';
 import { listShares } from '@/lib/chat/shares';
 import { requireAal2 } from '@/lib/supabase/server';
@@ -64,14 +65,16 @@ export default async function SettingsPage() {
 
         <Section
           title="Two-step sign-in"
-          description={
-            <>
-              <span className="badge badge-ok mr-1">On</span> It can&apos;t be turned off. You sign in with your password and a code
-              from{' '}
-              {authenticators.map((f) => `${f.friendly_name ?? 'your authenticator app'}, added ${longDate(f.created_at)}`).join('; ')}.
-            </>
-          }
+          description={`You sign in with your password and a code from ${authenticators
+            .map((f) => `${f.friendly_name ?? 'your authenticator app'}, added ${longDate(f.created_at)}`)
+            .join('; ')}.`}
         >
+          <Switch
+            label="Two-step sign-in"
+            checked
+            locked
+            lockedReason="Always on, to keep your conversations private. You can move it to a new phone below."
+          />
           <ReplaceAuthenticator />
         </Section>
 
