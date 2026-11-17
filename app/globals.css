@@ -211,6 +211,11 @@ body {
     font-size: 0.875rem;
     color: var(--foreground);
   }
+  /* Taller boxes for the sign-in and sign-up forms. */
+  .input-lg {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
   .input:focus {
     outline: 2px solid var(--brand);
     outline-offset: -1px;
@@ -268,6 +273,13 @@ body {
     background: var(--brand-soft);
     color: var(--brand);
     border: 1px solid var(--brand);
+  }
+
+  /* Behind the sign-in card: a faint red glow at the top, like the sky at dusk. */
+  .auth-sky {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, light-dark(rgb(200 16 46 / 0.08), rgb(200 16 46 / 0.18)), transparent),
+      var(--background);
   }
 
   /* The dark sidebar. */

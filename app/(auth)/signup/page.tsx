@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { PASSWORD_MIN, PASSWORD_RULE } from '@/lib/auth/password-rule';
+import { MailIcon } from '@/components/icons';
 import { signUp } from '../actions';
+import { PasswordField } from '../password-field';
 import { Field, FormError, FormTitle, Submit } from '../ui';
 
 export default function SignUpPage() {
@@ -24,12 +26,20 @@ export default function SignUpPage() {
   return (
     <form action={action} className="space-y-4">
       <FormTitle title="Create an account">For Kenya Airways passengers. It takes about two minutes.</FormTitle>
-      <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state?.email} required />
+      <Field
+        label="Email address"
+        name="email"
+        type="email"
+        autoComplete="email"
+        placeholder="Enter your email"
+        icon={<MailIcon />}
+        defaultValue={state?.email}
+        required
+      />
       <div>
-        <Field
+        <PasswordField
           label="Password"
           name="password"
-          type="password"
           autoComplete="new-password"
           minLength={PASSWORD_MIN}
           required
@@ -39,7 +49,7 @@ export default function SignUpPage() {
           Use {PASSWORD_RULE}.
         </p>
       </div>
-      <Field label="Confirm password" name="confirm" type="password" autoComplete="new-password" required />
+      <PasswordField label="Confirm password" name="confirm" autoComplete="new-password" required />
       <p className="text-xs text-muted">
         You&apos;ll also need an authenticator app (Microsoft Authenticator) on your phone.
       </p>
