@@ -13,7 +13,9 @@ export function Switch({
   lockedReason?: string;
   onChange?: (checked: boolean) => void;
 }) {
-  const reasonId = lockedReason ? `${label.replace(/\W+/g, '-').toLowerCase()}-reason` : undefined;
+  const reasonId = lockedReason
+    ? `${label.replace(/\W+/g, "-").toLowerCase()}-reason`
+    : undefined;
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
@@ -32,7 +34,7 @@ export function Switch({
         aria-describedby={reasonId}
         aria-disabled={locked || undefined}
         onClick={locked || !onChange ? undefined : () => onChange(!checked)}
-        className={`switch ${checked ? 'switch-on' : ''} ${locked ? 'switch-locked' : ''}`}
+        className={`switch ${checked ? "switch-on" : ""} ${locked ? "switch-locked" : ""}`}
       >
         <span className="switch-thumb" aria-hidden="true" />
       </button>

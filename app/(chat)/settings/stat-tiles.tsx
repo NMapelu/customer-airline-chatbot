@@ -1,42 +1,77 @@
-import type { ReactNode } from 'react';
-import { ChatIcon } from '@/components/icons';
-import type { ProfileStats } from '@/lib/profile/stats';
+import type { ReactNode } from "react";
+import { ChatIcon } from "@/components/icons";
+import type { ProfileStats } from "@/lib/profile/stats";
 
 const TONES = {
-  red: 'bg-[#c8102e] text-white',
-  ink: 'bg-[#111114] text-white',
-  soft: 'bg-brand-soft text-foreground',
-  plain: 'card text-foreground',
+  red: "bg-[#c8102e] text-white",
+  ink: "bg-[#111114] text-white",
+  soft: "bg-brand-soft text-foreground",
+  plain: "card text-foreground",
 } as const;
 
-function Tile({ value, label, icon, tone }: { value: string; label: string; icon: ReactNode; tone: keyof typeof TONES }) {
+function Tile({
+  value,
+  label,
+  icon,
+  tone,
+}: {
+  value: string;
+  label: string;
+  icon: ReactNode;
+  tone: keyof typeof TONES;
+}) {
   return (
     <div className={`flex items-center gap-3 rounded-xl p-4 ${TONES[tone]}`}>
       <span
-        className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${tone === 'red' || tone === 'ink' ? 'bg-white/15' : 'bg-[#c8102e] text-white'}`}
+        className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${tone === "red" || tone === "ink" ? "bg-white/15" : "bg-[#c8102e] text-white"}`}
         aria-hidden="true"
       >
         {icon}
       </span>
       <div className="min-w-0">
         <p className="text-2xl font-semibold leading-tight">{value}</p>
-        <p className={`text-xs ${tone === 'red' || tone === 'ink' ? 'text-white/80' : 'text-muted'}`}>{label}</p>
+        <p
+          className={`text-xs ${tone === "red" || tone === "ink" ? "text-white/80" : "text-muted"}`}
+        >
+          {label}
+        </p>
       </div>
     </div>
   );
 }
 
 const Svg = ({ children }: { children: ReactNode }) => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+  <svg
+    viewBox="0 0 24 24"
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    focusable="false"
+  >
     {children}
   </svg>
 );
 
 // Four numbers about the person's own use of the chatbot.
-export function StatTiles({ stats, memberFor }: { stats: ProfileStats; memberFor: string }) {
+export function StatTiles({
+  stats,
+  memberFor,
+}: {
+  stats: ProfileStats;
+  memberFor: string;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Tile tone="red" value={String(stats.conversations)} label="Conversations" icon={<ChatIcon />} />
+      <Tile
+        tone="red"
+        value={String(stats.conversations)}
+        label="Conversations"
+        icon={<ChatIcon />}
+      />
       <Tile
         tone="ink"
         value={String(stats.questions)}
