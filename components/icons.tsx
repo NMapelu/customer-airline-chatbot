@@ -34,12 +34,6 @@ export const ChatIcon = () => (
   </Icon>
 );
 
-export const ChecklistIcon = () => (
-  <Icon>
-    <path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />
-  </Icon>
-);
-
 export const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />

@@ -335,7 +335,7 @@ body {
   }
 }
 
-/* Printed checklists (overview §7.10) are always black on white, whatever the screen mode. */
+/* Printed pages are always black on white, whatever the screen mode. */
 @media print {
   :root {
     color-scheme: light;
