@@ -19,7 +19,7 @@ function TravelPicture() {
   return (
     <svg
       viewBox="0 0 320 180"
-      className="pointer-events-none absolute -right-6 bottom-0 hidden h-full w-auto opacity-95 sm:block"
+      className="pointer-events-none absolute right-2 bottom-0 hidden h-full w-auto opacity-95 sm:block"
       aria-hidden="true"
       focusable="false"
     >

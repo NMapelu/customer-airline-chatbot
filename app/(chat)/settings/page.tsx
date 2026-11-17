@@ -72,7 +72,7 @@ export default async function ProfilePage() {
                       prefetch={false}
                       className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-brand-soft"
                     >
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#111114] text-white" aria-hidden="true">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand" aria-hidden="true">
                         <ChatIcon />
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.title}</span>
@@ -94,6 +94,18 @@ export default async function ProfilePage() {
                 <p className="break-all text-sm text-muted">{user.email}</p>
               </div>
             </div>
+            <dl className="space-y-2 border-t border-line pt-3 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">Member since</dt>
+                <dd className="font-medium">{longDate(user.created_at)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">Two-step sign-in</dt>
+                <dd>
+                  <span className="badge badge-solid">On</span>
+                </dd>
+              </div>
+            </dl>
             <SignOutButton className="btn btn-outline w-full">Sign out of this browser</SignOutButton>
           </Section>
         </div>
