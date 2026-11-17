@@ -46,14 +46,6 @@ export default async function SettingsPage() {
                 <dt className="text-muted">Email</dt>
                 <dd className="break-all font-medium">{user.email}</dd>
               </div>
-              <div>
-                <dt className="text-muted">Account type</dt>
-                <dd>
-                  <span className={`badge ${role === 'agent' ? 'badge-solid' : 'badge-ok'}`}>
-                    {role === 'agent' ? 'Call-centre agent' : 'Passenger'}
-                  </span>
-                </dd>
-              </div>
             </dl>
             <SignOutButton className="btn btn-ok w-full">Sign out of this browser</SignOutButton>
           </Section>
