@@ -58,6 +58,9 @@ export function Sidebar({
         <ConversationList conversations={conversations} />
       </div>
       <div className="flex items-center gap-2 border-t border-[#2c2c33] pt-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#c8102e] text-sm font-semibold text-white" aria-hidden="true">
+          {(firstNameFromEmail(email) ?? email ?? '?').charAt(0).toUpperCase()}
+        </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-white" title={email}>
             {firstNameFromEmail(email) ?? 'Signed in'}
