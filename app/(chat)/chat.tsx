@@ -145,6 +145,20 @@ function EscalationSummary({ text }: { text: string }) {
   );
 }
 
+// A small red badge with a plane, next to each answer.
+function BotAvatar() {
+  return (
+    <span
+      className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e11d48] to-[#8f0b21] text-white shadow-md"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" focusable="false">
+        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+      </svg>
+    </span>
+  );
+}
+
 // The welcome picture: a plane circling a red globe badge. Decorative.
 function Orbit() {
   return (
@@ -315,16 +329,19 @@ export function Chat({
           </div>
         )}
         {messages.map((m, index) => (
-          <div key={m.id} className={`mx-auto flex max-w-3xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={m.id} className={`pop-in mx-auto flex max-w-3xl gap-2.5 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {m.role === 'assistant' && <BotAvatar />}
             <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white'
-                  : 'card w-full max-w-[95%] rounded-tl-md px-4 py-3'
+                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-[#e11d48] to-[#a10c24] px-4 py-2.5 text-white shadow-md shadow-[#c8102e]/20'
+                  : 'card w-full max-w-[92%] rounded-2xl rounded-tl-md px-4 py-3 shadow-sm'
               }
             >
               {m.role === 'assistant' && (
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Chatbot</p>
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+                  KQ Chatbot <span className="size-1.5 rounded-full bg-[#15803d]" aria-hidden="true" />
+                </p>
               )}
               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
               {m.role === 'user' ? (
