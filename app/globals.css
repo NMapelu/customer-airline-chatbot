@@ -378,17 +378,18 @@ body {
  * colours) as accents, and small animations. All of it switches off for reduced motion below.
  */
 @layer components {
-  /* A soft gradient sky: blush red at the top, white in the middle, mint green at the bottom. */
+  /* A bold gradient sky: Kenya Airways red sweeping into white and on into green. */
   .chat-sky {
     background:
-      radial-gradient(52rem 32rem at 85% -5%, light-dark(rgb(200 16 46 / 0.24), rgb(200 16 46 / 0.28)), transparent 70%),
-      radial-gradient(48rem 30rem at 5% 105%, light-dark(rgb(21 128 61 / 0.24), rgb(74 222 128 / 0.16)), transparent 70%),
-      radial-gradient(30rem 20rem at 0% 10%, light-dark(rgb(251 191 36 / 0.08), rgb(251 191 36 / 0.04)), transparent 70%),
-      linear-gradient(160deg, light-dark(#fff5f6, #17090c) 0%, light-dark(#ffffff, #0c0d10) 45%, light-dark(#f0fbf4, #08140d) 100%);
+      radial-gradient(42rem 30rem at 100% 0%, light-dark(rgb(200 16 46 / 0.55), rgb(200 16 46 / 0.55)), transparent 65%),
+      radial-gradient(40rem 28rem at 0% 100%, light-dark(rgb(21 128 61 / 0.5), rgb(22 163 74 / 0.42)), transparent 65%),
+      radial-gradient(28rem 20rem at 0% 0%, light-dark(rgb(251 113 133 / 0.35), rgb(136 19 55 / 0.35)), transparent 70%),
+      radial-gradient(28rem 20rem at 100% 100%, light-dark(rgb(134 239 172 / 0.45), rgb(20 83 45 / 0.4)), transparent 70%),
+      linear-gradient(135deg, light-dark(#ffe4e8, #2a0a11) 0%, light-dark(#fff7f8, #120b0e) 40%, light-dark(#f3fff7, #0a120d) 60%, light-dark(#dcfce7, #06200f) 100%);
   }
   /* Frosted panels that let the gradient show through, for answers, cards and the question box. */
   .glass {
-    background: light-dark(rgb(255 255 255 / 0.72), rgb(22 24 29 / 0.7));
+    background: light-dark(rgb(255 255 255 / 0.8), rgb(18 19 24 / 0.72));
     border: 1px solid light-dark(rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.08));
     box-shadow: 0 6px 24px -10px light-dark(rgb(17 17 20 / 0.18), rgb(0 0 0 / 0.6));
     backdrop-filter: blur(12px);
