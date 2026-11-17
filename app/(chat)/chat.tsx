@@ -197,11 +197,12 @@ export function Chat({
                 ? 'What is the caller asking about?'
                 : `How can I help with your trip${firstName ? `, ${firstName}` : ''}?`}
             </h1>
-            <p className="mt-2 text-sm text-muted">
-              {role === 'agent'
-                ? "Describe the caller's situation, or start with a common call. Answers use public information and internal procedures."
-                : 'Ask a question about your Kenya Airways trip, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
-            </p>
+            {role === 'agent' && (
+              <p className="mt-2 text-sm text-muted">
+                Describe the caller&apos;s situation, or start with a common call. Answers use public information and internal
+                procedures.
+              </p>
+            )}
           </div>
         )}
         {messages.length === 0 && role === 'agent' && (
