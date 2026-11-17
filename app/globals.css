@@ -265,6 +265,18 @@ body {
     transform: translateX(1.25rem);
   }
 
+  /* The conversation menu pops in with a small scale-up. */
+  .menu-pop {
+    animation: menu-pop 140ms ease-out;
+    transform-origin: top right;
+  }
+  @keyframes menu-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.94) translateY(-4px);
+    }
+  }
+
   .badge {
     display: inline-flex;
     align-items: center;
