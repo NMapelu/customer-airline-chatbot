@@ -8,7 +8,18 @@ import type { FeedbackReason } from './feedback';
 
 export const TITLE_MAX = 80;
 
-export type ConversationSummary = { id: string; title: string; updatedAt: string };
+export type ConversationSummary = { id: string; title: string; updatedAt: string; pinned: boolean; archived: boolean };
+
+type ConversationRow = { id: string; title: string; updated_at: string; pinned_at?: string | null; archived_at?: string | null };
+
+export function toSummary(row: ConversationRow): ConversationSummary {
+  return { id: row.id, title: row.title, updatedAt: row.updated_at, pinned: !!row.pinned_at, archived: !!row.archived_at };
+}
+
+// Pinned conversations first (most recently pinned on top), then the rest, newest first.
+export function sortForSidebar(list: ConversationSummary[]): ConversationSummary[] {
+  return [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt));
+}
 
 // A title from the first question, already masked, cut at a word boundary.
 export function titleFrom(question: string): string {
@@ -70,14 +81,18 @@ export async function saveMessage(
   if (touch.error) throw new Error(`could not update the conversation: ${touch.error.message}`);
 }
 
-export async function listConversations(supabase: SupabaseClient, limit = 50): Promise<ConversationSummary[]> {
-  const { data, error } = await supabase
-    .from('conversations')
-    .select('id, title, updated_at')
+// The sidebar list: unarchived conversations, pinned first. With `archived`, only archived ones.
+export async function listConversations(
+  supabase: SupabaseClient,
+  { archived = false, limit = 50 }: { archived?: boolean; limit?: number } = {},
+): Promise<ConversationSummary[]> {
+  const query = supabase.from('conversations').select('id, title, updated_at, pinned_at, archived_at');
+  const { data, error } = await (archived ? query.not('archived_at', 'is', null) : query.is('archived_at', null))
+    .order('pinned_at', { ascending: false, nullsFirst: false })
     .order('updated_at', { ascending: false })
     .limit(limit);
   if (error) throw new Error(`could not list conversations: ${error.message}`);
-  return (data ?? []).map((c) => ({ id: c.id, title: c.title, updatedAt: c.updated_at }));
+  return (data ?? []).map(toSummary);
 }
 
 const sourceSchema = z.object({
@@ -141,15 +156,15 @@ export async function searchConversations(supabase: SupabaseClient, query: strin
   const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const { data, error } = await supabase
     .from('messages')
-    .select('conversations!inner(id, title, updated_at)')
+    .select('conversations!inner(id, title, updated_at, pinned_at, archived_at)')
     .ilike('content', pattern)
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) throw new Error(`could not search conversations: ${error.message}`);
   const found = new Map<string, ConversationSummary>();
   for (const row of data ?? []) {
-    const c = row.conversations as unknown as { id: string; title: string; updated_at: string };
-    if (!found.has(c.id)) found.set(c.id, { id: c.id, title: c.title, updatedAt: c.updated_at });
+    const c = row.conversations as unknown as ConversationRow;
+    if (!found.has(c.id)) found.set(c.id, toSummary(c));
   }
   return [...found.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit);
 }
@@ -176,6 +191,39 @@ export async function saveFeedback(
 }
 
 // Permanent: the messages go with it (on delete cascade).
+// Pin or unpin (sidebar menu). Returns false when the conversation isn't the caller's.
+export async function setPinned(supabase: SupabaseClient, id: string, pinned: boolean): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ pinned_at: pinned ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select('id');
+  if (error) throw new Error(`could not pin the conversation: ${error.message}`);
+  return (data ?? []).length === 1;
+}
+
+// Archive (hide from the main list) or restore. Archiving also unpins.
+export async function setArchived(supabase: SupabaseClient, id: string, archived: boolean): Promise<boolean> {
+  const change = archived ? { archived_at: new Date().toISOString(), pinned_at: null } : { archived_at: null };
+  const { data, error } = await supabase.from('conversations').update(change).eq('id', id).select('id');
+  if (error) throw new Error(`could not archive the conversation: ${error.message}`);
+  return (data ?? []).length === 1;
+}
+
+// The newest answer in a conversation, for sharing it from the sidebar menu; null if none.
+export async function latestAnswerId(supabase: SupabaseClient, conversationId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('conversation_id', conversationId)
+    .eq('role', 'assistant')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`could not find the latest answer: ${error.message}`);
+  return (data?.id as string | undefined) ?? null;
+}
+
 export async function deleteConversation(supabase: SupabaseClient, id: string): Promise<boolean> {
   const { data, error } = await supabase.from('conversations').delete().eq('id', id).select('id');
   if (error) throw new Error(`could not delete the conversation: ${error.message}`);

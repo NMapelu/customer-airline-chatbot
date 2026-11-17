@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Brand } from '@/components/brand';
-import { ChartIcon, ChecklistIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
+import { ChartIcon, PlusIcon, SignOutIcon, UserIcon } from '@/components/icons';
 import type { ConversationSummary } from '@/lib/chat/history';
+import { firstNameFromEmail } from '@/lib/profile/first-name';
 import type { Role } from '@/lib/rag/types';
 import { SignOutButton } from '../(auth)/sign-out-button';
 import { ConversationList } from './conversation-list';
@@ -21,8 +22,7 @@ function NavLink({ href, icon, children }: { href: string; icon: ReactNode; chil
 }
 
 // The dark sidebar on every signed-in page: a new chat, the pages this account can use, the
-// conversation history (US-10) and who is signed in. Passengers see the checklist; administrators
-// see Insights. Agents see neither.
+// conversation history (US-10) and who is signed in. Administrators also see Insights.
 export function Sidebar({
   conversations,
   email,
@@ -44,13 +44,8 @@ export function Sidebar({
         New chat
       </Link>
       <div className="space-y-1">
-        {role === 'customer' && (
-          <NavLink href="/checklist" icon={<ChecklistIcon />}>
-            Pre-travel checklist
-          </NavLink>
-        )}
-        <NavLink href="/settings" icon={<SettingsIcon />}>
-          Settings
+        <NavLink href="/settings" icon={<UserIcon />}>
+          View profile
         </NavLink>
         {isAdmin && (
           <NavLink href="/admin" icon={<ChartIcon />}>
@@ -60,14 +55,16 @@ export function Sidebar({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-[#2c2c33] pt-4">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your conversations</p>
-        <ConversationList conversations={conversations} />
+        <ConversationList conversations={conversations} canShare={role === 'customer'} />
       </div>
       <div className="flex items-center gap-2 border-t border-[#2c2c33] pt-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#c8102e] text-sm font-semibold text-white" aria-hidden="true">
+          {(firstNameFromEmail(email) ?? email ?? '?').charAt(0).toUpperCase()}
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-white" title={email}>
-            {email}
+          <p className="truncate text-sm font-medium text-white" title={email}>
+            {firstNameFromEmail(email) ?? 'Signed in'}
           </p>
-          <p className="text-xs text-zinc-400">{role === 'agent' ? 'Call-centre agent' : isAdmin ? 'Passenger · administrator' : 'Passenger'}</p>
         </div>
         <SignOutButton className="nav-link px-2" >
           <SignOutIcon />

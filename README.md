@@ -233,7 +233,6 @@ Security principles, the threat model and scan results live in [`docs/security/`
 - **History:** search across your own conversations (server-side, under RLS).
 - **Sharing:** passengers can share one question and answer as a read-only link (`/s/<id>`) that expires after 30 days and can be turned off in the chat or in Settings. Agents can't share.
 - **Display:** light or dark mode (follows the device by default) and text size, in Settings.
-- **Pre-travel checklist** (`/checklist`, passengers): one message about the trip, one checklist with sources; topics the knowledge base doesn't cover are listed with the contact details. *Save as PDF* prints the checklist and its sources only.
 - **Insights** (`/admin`, administrators): question volume, answer, escalation and refusal rates, most-cited documents, knowledge gaps and recent thumbs-down answers. No emails or ids; detail only for the last 30 days; each visit is audit-logged. Give the role with `npm run set-admin -- <email>`, then sign in again.
 
 ## Authorship

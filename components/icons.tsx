@@ -34,9 +34,10 @@ export const ChatIcon = () => (
   </Icon>
 );
 
-export const ChecklistIcon = () => (
+export const UserIcon = () => (
   <Icon>
-    <path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
   </Icon>
 );
 
@@ -109,5 +110,44 @@ export const EyeIcon = () => (
 export const EyeOffIcon = () => (
   <Icon>
     <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.4 3.3M6.6 6.6A17.6 17.6 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
+  </Icon>
+);
+
+export const DotsIcon = () => (
+  <Icon>
+    <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.2" fill="currentColor" />
+  </Icon>
+);
+
+export const PinIcon = () => (
+  <Icon>
+    <path d="M12 17v5M9 3h6l-1 6 4 4v2H6v-2l4-4-1-6Z" />
+  </Icon>
+);
+
+export const ArchiveIcon = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="5" rx="1" />
+    <path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4" />
+  </Icon>
+);
+
+export const PencilIcon = () => (
+  <Icon>
+    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </Icon>
+);
+
+export const ShareIcon = () => (
+  <Icon>
+    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13" />
+  </Icon>
+);
+
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </Icon>
 );

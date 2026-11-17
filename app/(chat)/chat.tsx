@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
@@ -145,6 +145,50 @@ function EscalationSummary({ text }: { text: string }) {
   );
 }
 
+// A small red badge with a plane, next to each answer.
+function BotAvatar() {
+  return (
+    <span
+      className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#e11d48] to-[#8f0b21] text-white shadow-md"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" focusable="false">
+        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+      </svg>
+    </span>
+  );
+}
+
+// The welcome picture: a plane circling a red globe badge. Decorative.
+function Orbit() {
+  return (
+    <div className="float-slow relative mx-auto size-28" aria-hidden="true">
+      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#c8102e]/40" />
+      <div className="absolute inset-4 flex items-center justify-center rounded-full bg-gradient-to-br from-[#e11d48] to-[#8f0b21] shadow-lg shadow-[#c8102e]/30">
+        <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#fff" strokeWidth="1.4" focusable="false">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" />
+        </svg>
+      </div>
+      <div className="orbit absolute inset-0">
+        <span className="absolute -top-3 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full bg-[#15803d] text-white shadow-md">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="rotate-90" focusable="false">
+            <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+          </svg>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Passenger starting points: tapping one asks its question, like typing it.
+const PASSENGER_TOPICS = [
+  { emoji: '🧳', label: 'Baggage', question: 'How much checked baggage can I take in economy?', tone: 'red' },
+  { emoji: '🛫', label: 'Check-in', question: 'When does check-in close for my flight?', tone: 'green' },
+  { emoji: '💳', label: 'Refunds and changes', question: 'Can I get a refund if I cancel my ticket?', tone: 'green' },
+  { emoji: '🧑‍🦽', label: 'Special assistance', question: 'How do I request wheelchair assistance?', tone: 'red' },
+] as const;
+
 // Overview §7.14: common call types, one click away.
 const AGENT_QUICK_STARTS = [
   { label: 'Refund request', question: 'A caller wants a refund for their ticket. How do I handle it?' },
@@ -165,7 +209,17 @@ const transport = new DefaultChatTransport<ChatMessage>({
 });
 
 // One conversation. `id` is its address (/c/<id>); the server creates it on the first question.
-export function Chat({ id, role, initialMessages }: { id: string; role: Role; initialMessages: ChatMessage[] }) {
+export function Chat({
+  id,
+  role,
+  firstName,
+  initialMessages,
+}: {
+  id: string;
+  role: Role;
+  firstName: string | null;
+  initialMessages: ChatMessage[];
+}) {
   const router = useRouter();
   const { messages, sendMessage, status, error } = useChat<ChatMessage>({
     id,
@@ -177,19 +231,84 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
   const [input, setInput] = useState('');
   const busy = status === 'submitted' || status === 'streaming';
 
+  // Keep the newest message in view: jump to the bottom when a conversation opens, and follow the
+  // answer as it arrives. If the reader has scrolled up to reread something, leave them there
+  // until they send the next question.
+  const scroller = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const lastRole = messages.at(-1)?.role;
+  useEffect(() => {
+    if (lastRole === 'user') following.current = true;
+  }, [messages.length, lastRole]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && following.current) el.scrollTop = el.scrollHeight;
+  }, [messages, status, error]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6">
+    <div className="chat-sky flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="flex-1 space-y-5 overflow-y-auto px-4 py-6"
+      >
         {messages.length === 0 && (
-          <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              {role === 'agent' ? 'What is the caller asking about?' : 'How can I help with your trip?'}
+          <div className="pop-in mx-auto mt-4 max-w-xl text-center sm:mt-12">
+            <Orbit />
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-4xl">
+              {role === 'agent' ? (
+                'What is the caller asking about?'
+              ) : firstName ? (
+                <>
+                  How can I help with your trip, <span className="text-kq-gradient">{firstName}</span>?
+                </>
+              ) : (
+                'How can I help with your trip?'
+              )}
             </h1>
             <p className="mt-2 text-sm text-muted">
               {role === 'agent'
                 ? "Describe the caller's situation, or start with a common call. Answers use public information and internal procedures."
-                : 'Ask a question about your Kenya Airways trip, such as baggage, refunds, check-in or special assistance. Every answer shows where it comes from.'}
+                : 'Ask a question about your Kenya Airways trip.'}
             </p>
+          </div>
+        )}
+        {messages.length === 0 && role === 'customer' && (
+          <div className="mx-auto grid max-w-xl gap-3 sm:grid-cols-2">
+            {PASSENGER_TOPICS.map((t, i) => (
+              <button
+                key={t.label}
+                type="button"
+                disabled={busy}
+                onClick={() => sendMessage({ text: t.question })}
+                style={{ animationDelay: `${120 + i * 70}ms` }}
+                className={`pop-in lift glass group flex items-center gap-3 rounded-2xl p-3 text-left ${
+                  t.tone === 'red' ? 'hover:border-[#c8102e]' : 'hover:border-[#15803d]'
+                }`}
+              >
+                <span
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl text-2xl ${
+                    t.tone === 'red' ? 'bg-brand-soft' : 'bg-ok-soft'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {t.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{t.label}</span>
+                  <span className="block text-xs text-muted">{t.question}</span>
+                </span>
+                <span
+                  className={`text-lg transition-transform group-hover:translate-x-1 ${t.tone === 'red' ? 'text-brand' : 'text-ok'}`}
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </button>
+            ))}
           </div>
         )}
         {messages.length === 0 && role === 'agent' && (
@@ -210,16 +329,19 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           </div>
         )}
         {messages.map((m, index) => (
-          <div key={m.id} className={`mx-auto flex max-w-3xl ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={m.id} className={`pop-in mx-auto flex max-w-3xl gap-2.5 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {m.role === 'assistant' && <BotAvatar />}
             <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#c8102e] px-4 py-2.5 text-white'
-                  : 'card w-full max-w-[95%] rounded-tl-md px-4 py-3'
+                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-[#e11d48] to-[#a10c24] px-4 py-2.5 text-white shadow-md shadow-[#c8102e]/20'
+                  : 'glass w-full max-w-[92%] rounded-2xl rounded-tl-md px-4 py-3'
               }
             >
               {m.role === 'assistant' && (
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">KQ Chatbot</p>
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+                  KQ Chatbot <span className="size-1.5 rounded-full bg-[#15803d]" aria-hidden="true" />
+                </p>
               )}
               {/* Questions are plain text. Answers are Markdown with raw HTML dropped (threat model T3). */}
               {m.role === 'user' ? (
@@ -252,14 +374,14 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
               {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
               {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <p className="mb-2 text-xs font-semibold text-muted">You could also ask</p>
+                  <p className="mb-2 text-xs font-semibold text-ok">💡 You could also ask</p>
                   <div className="flex flex-wrap gap-2">
                   {m.metadata!.followUps!.map((q) => (
                     <button
                       key={q}
                       type="button"
                       onClick={() => sendMessage({ text: q })}
-                      className="chip"
+                      className="chip lift hover:border-[#15803d] hover:text-ok"
                     >
                       {q}
                     </button>
@@ -271,12 +393,14 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
           </div>
         ))}
         {busy && messages.at(-1)?.role === 'user' && (
-          <div className="mx-auto flex max-w-3xl" role="status">
-            <div className="card flex items-center gap-2 px-4 py-3 text-sm text-muted">
-              <span className="flex gap-1" aria-hidden="true">
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
+          <div className="mx-auto flex max-w-3xl gap-2.5" role="status">
+            <BotAvatar />
+            <div className="glass flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-muted">
+              <span className="relative h-4 w-14 overflow-hidden" aria-hidden="true">
+                <span className="absolute inset-x-0 top-1/2 border-t-2 border-dashed border-[#15803d]/50" />
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="#c8102e" className="fly-across absolute top-0 left-0 rotate-90" focusable="false">
+                  <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+                </svg>
               </span>
               Finding your answer…
             </div>
@@ -297,9 +421,12 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
         }}
         className="mx-auto w-full max-w-3xl px-4 pb-4"
       >
-        <div className="card flex items-center gap-2 p-2 shadow-lg focus-within:ring-2 focus-within:ring-[#c8102e]">
+        <div className="glass flex items-center gap-2 rounded-full p-1.5 pl-3 transition focus-within:ring-2 focus-within:ring-[#15803d]">
+          <span className="text-lg" aria-hidden="true">
+            ✈️
+          </span>
           <input
-            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-foreground outline-none"
+            className="min-w-0 flex-1 bg-transparent px-1 py-2 text-foreground outline-none"
             value={input}
             maxLength={1000}
             aria-label="Your question"
@@ -307,8 +434,15 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
             onChange={(e) => setInput(e.target.value)}
             disabled={busy}
           />
-          <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary" aria-label="Send">
-            <SendIcon />
+          <button
+            type="submit"
+            disabled={busy || !input.trim()}
+            className="btn btn-primary group rounded-full px-4 transition-transform hover:scale-105"
+            aria-label="Send"
+          >
+            <span className="transition-transform group-hover:-rotate-12 group-hover:translate-x-0.5">
+              <SendIcon />
+            </span>
             <span className="hidden sm:inline">Send</span>
           </button>
         </div>

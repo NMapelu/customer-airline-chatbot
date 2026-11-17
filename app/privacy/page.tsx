@@ -84,7 +84,6 @@ export default function PrivacyPage() {
           <li>Conversations: 12 months after your last message in them, then deleted automatically.</li>
           <li>Ratings: as long as the answer they are about.</li>
           <li>Shared links: they stop working after 30 days or when you stop sharing them, and are then deleted.</li>
-          <li>Trip descriptions for the pre-travel checklist: not stored.</li>
           <li>Security records: 12 months, then deleted automatically.</li>
           <li>Your account: until you delete it.</li>
         </ul>
