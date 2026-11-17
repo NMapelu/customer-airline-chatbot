@@ -202,7 +202,7 @@ export function Chat({
   }, [messages, status, error]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="chat-sky flex min-h-0 flex-1 flex-col">
       <div
         ref={scroller}
         onScroll={(e) => {
