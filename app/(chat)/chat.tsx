@@ -165,7 +165,17 @@ const transport = new DefaultChatTransport<ChatMessage>({
 });
 
 // One conversation. `id` is its address (/c/<id>); the server creates it on the first question.
-export function Chat({ id, role, initialMessages }: { id: string; role: Role; initialMessages: ChatMessage[] }) {
+export function Chat({
+  id,
+  role,
+  firstName,
+  initialMessages,
+}: {
+  id: string;
+  role: Role;
+  firstName: string | null;
+  initialMessages: ChatMessage[];
+}) {
   const router = useRouter();
   const { messages, sendMessage, status, error } = useChat<ChatMessage>({
     id,
@@ -183,7 +193,9 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
         {messages.length === 0 && (
           <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              {role === 'agent' ? 'What is the caller asking about?' : 'How can I help with your trip?'}
+              {role === 'agent'
+                ? 'What is the caller asking about?'
+                : `How can I help with your trip${firstName ? `, ${firstName}` : ''}?`}
             </h1>
             <p className="mt-2 text-sm text-muted">
               {role === 'agent'
