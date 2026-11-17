@@ -299,7 +299,7 @@ export function Chat({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold">{t.label}</span>
-                  <span className="block truncate text-xs text-muted">{t.question}</span>
+                  <span className="block text-xs text-muted">{t.question}</span>
                 </span>
                 <span
                   className={`text-lg transition-transform group-hover:translate-x-1 ${t.tone === 'red' ? 'text-brand' : 'text-ok'}`}
