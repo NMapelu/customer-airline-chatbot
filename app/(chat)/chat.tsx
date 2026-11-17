@@ -167,6 +167,14 @@ function Orbit() {
   );
 }
 
+// Passenger starting points: tapping one asks its question, like typing it.
+const PASSENGER_TOPICS = [
+  { emoji: '🧳', label: 'Baggage', question: 'How much checked baggage can I take in economy?', tone: 'red' },
+  { emoji: '🛫', label: 'Check-in', question: 'When does check-in close for my flight?', tone: 'green' },
+  { emoji: '💳', label: 'Refunds and changes', question: 'Can I get a refund if I cancel my ticket?', tone: 'green' },
+  { emoji: '🧑‍🦽', label: 'Special assistance', question: 'How do I request wheelchair assistance?', tone: 'red' },
+] as const;
+
 // Overview §7.14: common call types, one click away.
 const AGENT_QUICK_STARTS = [
   { label: 'Refund request', question: 'A caller wants a refund for their ticket. How do I handle it?' },
@@ -252,6 +260,41 @@ export function Chat({
                 ? "Describe the caller's situation, or start with a common call. Answers use public information and internal procedures."
                 : 'Ask a question about your Kenya Airways trip.'}
             </p>
+          </div>
+        )}
+        {messages.length === 0 && role === 'customer' && (
+          <div className="mx-auto grid max-w-xl gap-3 sm:grid-cols-2">
+            {PASSENGER_TOPICS.map((t, i) => (
+              <button
+                key={t.label}
+                type="button"
+                disabled={busy}
+                onClick={() => sendMessage({ text: t.question })}
+                style={{ animationDelay: `${120 + i * 70}ms` }}
+                className={`pop-in lift card group flex items-center gap-3 p-3 text-left ${
+                  t.tone === 'red' ? 'hover:border-[#c8102e]' : 'hover:border-[#15803d]'
+                }`}
+              >
+                <span
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl text-2xl ${
+                    t.tone === 'red' ? 'bg-brand-soft' : 'bg-ok-soft'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {t.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{t.label}</span>
+                  <span className="block truncate text-xs text-muted">{t.question}</span>
+                </span>
+                <span
+                  className={`text-lg transition-transform group-hover:translate-x-1 ${t.tone === 'red' ? 'text-brand' : 'text-ok'}`}
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </button>
+            ))}
           </div>
         )}
         {messages.length === 0 && role === 'agent' && (
