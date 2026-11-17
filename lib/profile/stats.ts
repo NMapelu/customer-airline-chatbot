@@ -20,7 +20,7 @@ export async function profileStats(supabase: SupabaseClient): Promise<ProfileSta
 export function memberFor(createdAt: string, now: Date = new Date()): string {
   const days = Math.max(0, Math.floor((now.getTime() - new Date(createdAt).getTime()) / 86_400_000));
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
-  if (days < 1) return 'Today';
+  if (days < 1) return 'Under a day';
   if (days < 14) return plural(days, 'day');
   if (days < 61) return plural(Math.floor(days / 7), 'week');
   if (days < 730) return plural(Math.floor(days / 30), 'month');
