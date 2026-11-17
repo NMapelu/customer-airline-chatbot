@@ -14,21 +14,28 @@ Questions outside the policies are refused or handed off to KQ customer service,
 ```
 Browser ──HTTPS──▶ Cloudflare Worker (Next.js via OpenNext)
                      │  proxy.ts: session + MFA (AAL2) check, CSP nonce
-                     │  /api/chat: rate limit → PII mask → scope check → retrieval → confidence gate
+                     │  /api/chat: rate limit → PII mask → scope check (Random Forest, then the AI
+                     │             model if unsure) → retrieval → confidence gate
                      │             → staff-content guard → answer from passages only → sources
+                     ├──▶ Workers AI (bge-small embeddings for the Random Forest) + KV (the forest's trees)
                      ├──▶ Supabase (Auth with TOTP, Postgres + pgvector, Row Level Security)
-                     └──▶ OpenAI (GPT-4o, text-embedding-3-small; no tools, no internet)
+                     └──▶ AI provider, chosen with AI_PROVIDER: Google Gemini (live) or OpenAI
+                          (chat model and embeddings; no tools, no internet)
 ```
 
 The Worker holds only the Supabase anon key and acts as the signed-in user, so the database's RLS decides what each person can read. The knowledge base is loaded by an admin script (`npm run ingest`), the only place the service-role key is used.
 
 ## Tech stack
 
-Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · OpenAI (GPT-4o, text-embedding-3-small) · Supabase (Auth with TOTP MFA, Postgres, pgvector, Row Level Security) · Cloudflare Workers · GitHub Actions
+Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · Google Gemini (gemini-3.5-flash, gemini-embedding-001; live) or OpenAI (GPT-4o, text-embedding-3-small) · scikit-learn Random Forest (trained in Google Colab) · Cloudflare Workers, Workers AI and KV · Supabase (Auth with TOTP MFA, Postgres, pgvector, Row Level Security) · GitHub Actions
+
+## Release
+
+The live site runs the release tagged **`v1.0.0`**, built from `main` (see [Deployment](#deployment)). The evaluation figures in `eval/report.md` were measured on 21 October 2026 with OpenAI GPT-4o, before the switch to Gemini; the Random Forest's own results are in [`notebooks/`](notebooks/).
 
 ## Getting started
 
-Requirements: Node.js 22 LTS and an OpenAI API key.
+Requirements: Node.js 22 LTS and either a Google Gemini API key (free tier, `AI_PROVIDER=google`) or an OpenAI API key (`AI_PROVIDER=openai`). For the Random Forest scope check, a Cloudflare account (`npx wrangler login`), because Workers AI only runs on Cloudflare; without it every question goes to the AI model's scope check instead.
 
 ```bash
 git clone https://github.com/NMapelu/customer-airline-chatbot.git
@@ -42,15 +49,18 @@ Server secrets live in `.dev.vars` locally and in Cloudflare secrets when deploy
 
 ### Secrets for the deployed site
 
-The deployed Worker needs these three Cloudflare secrets. Set each one once; each command asks for the value, which you paste into the terminal, never into a file or a chat:
+The deployed Worker needs these Cloudflare secrets. Set each one once; each command asks for the value, which you paste into the terminal, never into a file or a chat:
 
 ```bash
-npx wrangler secret put OPENAI_API_KEY
+npx wrangler secret put AI_PROVIDER                    # google or openai
+npx wrangler secret put GOOGLE_GENERATIVE_AI_API_KEY   # with google; OPENAI_API_KEY with openai
 npx wrangler secret put SUPABASE_URL        # exactly https://<ref>.supabase.co, nothing after it, no quotes
 npx wrangler secret put SUPABASE_ANON_KEY   # the anon / publishable key, never the service-role key
 ```
 
-`npx wrangler secret list` shows which are set (names only). Changes take effect without a redeploy. If one is missing or malformed, every page shows "The service is not available right now"; `npx wrangler tail` then shows which one in the server log ("Invalid server environment"). If OpenAI rejects the key or the account has no credit left, the chat says it can't answer right now, and the log shows OpenAI's reason.
+`GEMINI_MODEL` is optional and picks another Gemini model without changing code.
+
+`npx wrangler secret list` shows which are set (names only). Changes take effect without a redeploy. If one is missing or malformed, every page shows "The service is not available right now"; `npx wrangler tail` then shows which one in the server log ("Invalid server environment"). If the AI provider rejects the key, is over its free-tier limit or doesn't reply within 45 seconds, the chat says it can't answer right now, and the log shows the reason.
 
 ## Scripts
 
@@ -93,7 +103,7 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 
 - `docs/sources.json` lists the 16 Kenya Airways pages the chatbot answers from. Their text is **fetched at ingest time and never committed**, because this repo is public. Fetched pages land in `docs/public/`, which git ignores, and from there go only into the private Supabase database.
 - `docs/staff/` holds 10 sample call-centre procedures written for this project. They are marked `illustrative: true` and are **not real Kenya Airways documents**. They describe how an agent applies the public policies, and don't add fees or limits of their own.
-- `npm run ingest` loads the knowledge base into Supabase. It fetches the KQ pages, runs the check, splits each document into chunks, embeds new or changed documents with OpenAI, and replaces each one's chunks in a single transaction. A second run with nothing changed reports everything as unchanged. Add `-- --dry-run` to see the plan without embedding anything, or `-- --skip-fetch` to reuse the pages already in `docs/public/`. It needs a `.env.ingest` file (copy `.env.ingest.example`). The Supabase service-role key lives only there, never in `.env.local`, `.dev.vars` or Cloudflare.
+- `npm run ingest` loads the knowledge base into Supabase. It fetches the KQ pages, runs the check, splits each document into chunks, embeds new or changed documents with the chosen provider (switching provider re-embeds everything), and replaces each one's chunks in a single transaction. A second run with nothing changed reports everything as unchanged. Add `-- --dry-run` to see the plan without embedding anything, or `-- --skip-fetch` to reuse the pages already in `docs/public/`. It needs a `.env.ingest` file (copy `.env.ingest.example`). The Supabase service-role key lives only there, never in `.env.local`, `.dev.vars` or Cloudflare.
 - `npm run check-corpus` checks every document's front matter (audience, sources, dates). A document with a missing or wrong audience fails, so it can never be shown to the wrong users.
 
 ## How the chat answers
@@ -102,7 +112,7 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 
 1. Check the user has an MFA-verified session and read their role from `app_metadata`.
 2. Mask anything that looks like a card, passport, phone number or booking reference (`pii.ts`), then save the question to the conversation and read the earlier turns from the database (`lib/chat/history.ts`). The browser sends only the conversation id and the new question.
-3. Refuse messages that aren't about Kenya Airways policy (`scope.ts`), judging the user's own words. If OpenAI can't be reached for this or any other check, nothing is answered and the chat says it can't answer right now.
+3. Refuse messages that aren't about Kenya Airways policy, judging the user's own words. The Random Forest goes first (`forest.ts`): it embeds the message with Workers AI and averages its 300 trees. Above 0.7 it refuses straight away, below 0.3 it lets the question through, and in between, or if anything fails, the AI model's scope check decides (`scope.ts`). If the AI provider can't be reached for this or any other check, nothing is answered and the chat says it can't answer right now.
 4. Turn a follow-up into a standalone question for the search (`rewrite.ts`).
 5. Search the knowledge base twice, with the question and with it restated in the airline's policy wording, and take passages from each in turn, so the reworded search adds passages without pushing out what the question itself found. Both searches use the user's own session, so RLS decides what they can see (`retrieve.ts`, `rewrite.ts`).
 6. If no passage is similar enough, or a model check finds the passages don't actually answer the question, reply with the KQ contact details instead of generating an answer (`gate.ts`, `coverage.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
@@ -115,7 +125,7 @@ The similarity threshold in `lib/rag/config.ts` is chosen from the evaluation re
 
 `eval/questions.jsonl` holds 216 test questions in the categories of overview §13.1: answerable, not covered, off-topic, prompt injection, follow-ups, staff-content leakage, and agent questions. `npm run eval` sends each one through the same pipeline as the chat, signed in as the customer or agent test user (see below), so retrieval goes through RLS. Without an agent test user, the agent questions are skipped. An LLM judge checks that every answer's facts are in its passages.
 
-It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A full run makes about 700 OpenAI calls, mostly on gpt-4o; estimated from token counts, that is roughly 4 US dollars of credit. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
+It writes `eval/report.md` with pass rates against the §14 targets, the failures, and the similarity threshold that best separates covered from uncovered questions. Full answers go to `eval/results.jsonl`, which git ignores because answers can quote KQ's pages. A full run makes about 700 model calls. With OpenAI that is roughly 4 US dollars of credit; with Gemini's free tier it is more than one day's limit, so run one category at a time with a pause between questions, for example `npm run eval -- --category=uncovered --pause=60`. Add `-- --category=uncovered` to run some categories only, or `-- --threshold=0.5` to try another threshold.
 
 ## Accounts and sign-in
 
@@ -179,7 +189,19 @@ These values stay in `.dev.vars` only. Never set them as Cloudflare secrets.
 
 ## Deployment
 
-The live site is https://kq-policy-assistant.neema-mapelu.workers.dev. To deploy a change: apply any new migrations with `npx supabase db push`, then run `npm run deploy` (it refuses to build if a secret would end up in the bundle). The Worker's three secrets are described under [Secrets for the deployed site](#secrets-for-the-deployed-site). Sign-up and password emails go through a custom SMTP server set in the Supabase dashboard (Authentication → Emails → SMTP Settings), because Supabase's built-in sender only mails the project's own team.
+The live site is https://kq-policy-assistant.neema-mapelu.workers.dev. Deployment is manual, from an up-to-date `main`:
+
+1. `git checkout main` and `git pull`.
+2. Apply any new migrations: `npx supabase db push`.
+3. `npm run deploy`. It refuses to build if a secret would end up in the bundle, then uploads the Worker and prints `Deployed kq-policy-assistant` with a version ID.
+4. Check it: open the site, sign in, ask one question, and watch `npx wrangler tail` for errors.
+5. Tag the commit you deployed (`git tag vX.Y.Z`, then `git push origin vX.Y.Z`) and note the version ID.
+
+To roll back, run `npx wrangler deployments list` and `npx wrangler rollback <version-id>`. Database migrations are not rolled back by this. The Worker's secrets are described under [Secrets for the deployed site](#secrets-for-the-deployed-site).
+
+The Random Forest lives in Cloudflare KV (key `scope-forest`), not in the code. To update it, rerun the notebooks and upload the new `scope-forest.json` with `npx wrangler kv key put scope-forest --binding SCOPE_FOREST --path scope-forest.json --remote`. To switch it off, delete that key; every question then goes to the AI model's scope check.
+
+Sign-up and password-reset emails need a custom SMTP sender in the Supabase dashboard (Authentication → Emails → SMTP Settings). Without one, Supabase's built-in sender mails only the project's own team, a few emails an hour.
 
 ## Release review
 
@@ -190,7 +212,7 @@ The live site is https://kq-policy-assistant.neema-mapelu.workers.dev. To deploy
 
 ## Project management
 
-Work is tracked on the GitHub project board. There is one milestone per build phase, and every change is linked to an issue and merged through a pull request with green CI.
+Phases 0.5 to 13 were each merged through pull requests with green CI. Some later changes (the Gemini option, early November 2026) were committed directly to `main`; the Random Forest (#32) and the redesign (#33) went through pull requests again.
 
 ## Security
 
@@ -216,4 +238,11 @@ Security principles, the threat model and scan results live in [`docs/security/`
 
 ## Authorship
 
-The project is owned and directed by Neema Mapelu. Parts of the code are written with the AI assistant Claude, and those commits are marked `Co-Authored-By: Claude`. Every change is reviewed and merged by the owner.
+The project is owned and directed by Neema Mapelu, who reviews and merges every change.
+
+- **Written with the AI assistant Claude (Anthropic):** most of the application code, the database migrations and tests, the redesign, the Gemini option, the Random Forest's integration into the app (`lib/rag/forest.ts`) and the Colab notebook code in `notebooks/`. Commits up to early November 2026 carry `Co-Authored-By: Claude`; some later commits of Claude-written code don't.
+- **Neema Mapelu's own work:** the project's design and requirements, the Random Forest's training data choices, training runs and results, the threat-model and README edits committed under her name, and the written report.
+
+## Licence
+
+No open-source licence is granted. The code is shared for academic assessment; all rights reserved by the author.
