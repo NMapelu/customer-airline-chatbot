@@ -393,12 +393,14 @@ export function Chat({
           </div>
         ))}
         {busy && messages.at(-1)?.role === 'user' && (
-          <div className="mx-auto flex max-w-3xl" role="status">
-            <div className="card flex items-center gap-2 px-4 py-3 text-sm text-muted">
-              <span className="flex gap-1" aria-hidden="true">
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:150ms]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-[#c8102e] [animation-delay:300ms]" />
+          <div className="mx-auto flex max-w-3xl gap-2.5" role="status">
+            <BotAvatar />
+            <div className="card flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-muted">
+              <span className="relative h-4 w-14 overflow-hidden" aria-hidden="true">
+                <span className="absolute inset-x-0 top-1/2 border-t-2 border-dashed border-[#15803d]/50" />
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="#c8102e" className="fly-across absolute top-0 left-0 rotate-90" focusable="false">
+                  <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+                </svg>
               </span>
               Finding your answer…
             </div>
