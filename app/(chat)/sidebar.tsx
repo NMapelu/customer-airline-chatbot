@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Brand } from '@/components/brand';
-import { ChartIcon, ChecklistIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
+import { ChartIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
 import type { ConversationSummary } from '@/lib/chat/history';
 import { firstNameFromEmail } from '@/lib/profile/first-name';
 import type { Role } from '@/lib/rag/types';
@@ -22,8 +22,7 @@ function NavLink({ href, icon, children }: { href: string; icon: ReactNode; chil
 }
 
 // The dark sidebar on every signed-in page: a new chat, the pages this account can use, the
-// conversation history (US-10) and who is signed in. Passengers see the checklist; administrators
-// see Insights. Agents see neither.
+// conversation history (US-10) and who is signed in. Administrators also see Insights.
 export function Sidebar({
   conversations,
   email,
@@ -45,11 +44,6 @@ export function Sidebar({
         New chat
       </Link>
       <div className="space-y-1">
-        {role === 'customer' && (
-          <NavLink href="/checklist" icon={<ChecklistIcon />}>
-            Pre-travel checklist
-          </NavLink>
-        )}
         <NavLink href="/settings" icon={<SettingsIcon />}>
           Settings
         </NavLink>
