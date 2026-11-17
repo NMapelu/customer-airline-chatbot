@@ -145,6 +145,28 @@ function EscalationSummary({ text }: { text: string }) {
   );
 }
 
+// The welcome picture: a plane circling a red globe badge. Decorative.
+function Orbit() {
+  return (
+    <div className="float-slow relative mx-auto size-28" aria-hidden="true">
+      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#c8102e]/40" />
+      <div className="absolute inset-4 flex items-center justify-center rounded-full bg-gradient-to-br from-[#e11d48] to-[#8f0b21] shadow-lg shadow-[#c8102e]/30">
+        <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#fff" strokeWidth="1.4" focusable="false">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" />
+        </svg>
+      </div>
+      <div className="orbit absolute inset-0">
+        <span className="absolute -top-3 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full bg-[#15803d] text-white shadow-md">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="rotate-90" focusable="false">
+            <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z" />
+          </svg>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // Overview §7.14: common call types, one click away.
 const AGENT_QUICK_STARTS = [
   { label: 'Refund request', question: 'A caller wants a refund for their ticket. How do I handle it?' },
@@ -212,11 +234,18 @@ export function Chat({
         className="flex-1 space-y-5 overflow-y-auto px-4 py-6"
       >
         {messages.length === 0 && (
-          <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              {role === 'agent'
-                ? 'What is the caller asking about?'
-                : `How can I help with your trip${firstName ? `, ${firstName}` : ''}?`}
+          <div className="pop-in mx-auto mt-4 max-w-xl text-center sm:mt-12">
+            <Orbit />
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-4xl">
+              {role === 'agent' ? (
+                'What is the caller asking about?'
+              ) : firstName ? (
+                <>
+                  How can I help with your trip, <span className="text-kq-gradient">{firstName}</span>?
+                </>
+              ) : (
+                'How can I help with your trip?'
+              )}
             </h1>
             <p className="mt-2 text-sm text-muted">
               {role === 'agent'
