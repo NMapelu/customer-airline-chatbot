@@ -3,7 +3,17 @@
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { z } from 'zod';
-import { deleteConversation, renameConversation, searchConversations, TITLE_MAX, type ConversationSummary } from '@/lib/chat/history';
+import {
+  deleteConversation,
+  latestAnswerId,
+  listConversations,
+  renameConversation,
+  searchConversations,
+  setArchived,
+  setPinned,
+  TITLE_MAX,
+  type ConversationSummary,
+} from '@/lib/chat/history';
 import { createShare, revokeShare } from '@/lib/chat/shares';
 import { audit } from '@/lib/security/audit';
 import { requireAal2 } from '@/lib/supabase/server';
@@ -46,6 +56,43 @@ export async function deleteConversationAction(id: string): Promise<ActionResult
   }
   revalidatePath('/', 'layout');
   return { ok: true };
+}
+
+// Sidebar menu: pin or unpin, archive or restore. RLS only lets them touch the caller's own rows.
+export async function pinConversationAction(id: string, pinned: boolean): Promise<ActionResult> {
+  return changeConversation(id, (supabase, convId) => setPinned(supabase, convId, pinned === true));
+}
+
+export async function archiveConversationAction(id: string, archived: boolean): Promise<ActionResult> {
+  return changeConversation(id, (supabase, convId) => setArchived(supabase, convId, archived === true));
+}
+
+async function changeConversation(
+  id: string,
+  change: (supabase: Awaited<ReturnType<typeof requireAal2>>['supabase'], id: string) => Promise<boolean>,
+): Promise<ActionResult> {
+  const parsedId = idSchema.safeParse(id);
+  if (!parsedId.success) return { ok: false, error: 'Conversation not found.' };
+  const { supabase } = await requireAal2();
+  try {
+    if (!(await change(supabase, parsedId.data))) return { ok: false, error: 'Conversation not found.' };
+  } catch (error) {
+    console.error('conversation change failed', error);
+    return { ok: false, error: 'Sorry, something went wrong. Please try again.' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+// The archived conversations, for the "Archived" list at the bottom of the sidebar.
+export async function listArchivedAction(): Promise<{ ok: true; conversations: ConversationSummary[] } | { ok: false; error: string }> {
+  const { supabase } = await requireAal2();
+  try {
+    return { ok: true, conversations: await listConversations(supabase, { archived: true }) };
+  } catch (error) {
+    console.error('archived list failed', error);
+    return { ok: false, error: 'Sorry, something went wrong. Please try again.' };
+  }
 }
 
 // Overview §7.15. RLS limits the search to the caller's own messages.
@@ -92,4 +139,23 @@ export async function revokeShareAction(id: string): Promise<ActionResult> {
   }
   revalidatePath('/settings');
   return { ok: true };
+}
+
+// Share from the sidebar menu: a link to the conversation's newest answer, the same read-only,
+// 30-day link as sharing one answer. Passengers only, as for single answers.
+export async function shareConversationAction(conversationId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const parsedId = idSchema.safeParse(conversationId);
+  if (!parsedId.success) return { ok: false, error: 'Conversation not found.' };
+  const { supabase, role } = await requireAal2();
+  if (role === 'agent') return { ok: false, error: "Agent answers can't be shared." };
+  try {
+    const answerId = await latestAnswerId(supabase, parsedId.data);
+    if (!answerId) return { ok: false, error: 'There is no answer to share yet.' };
+    const id = await createShare(supabase, answerId);
+    if (!id) return { ok: false, error: 'Conversation not found.' };
+    return { ok: true, id };
+  } catch (error) {
+    console.error('share failed', error);
+    return { ok: false, error: 'Sorry, something went wrong. Please try again.' };
+  }
 }
