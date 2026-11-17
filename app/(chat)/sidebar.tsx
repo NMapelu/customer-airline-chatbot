@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { Brand } from '@/components/brand';
 import { ChartIcon, ChecklistIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
 import type { ConversationSummary } from '@/lib/chat/history';
+import { firstNameFromEmail } from '@/lib/profile/first-name';
 import type { Role } from '@/lib/rag/types';
 import { SignOutButton } from '../(auth)/sign-out-button';
 import { ConversationList } from './conversation-list';
@@ -64,8 +65,8 @@ export function Sidebar({
       </div>
       <div className="flex items-center gap-2 border-t border-[#2c2c33] pt-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-white" title={email}>
-            {email}
+          <p className="truncate text-sm font-medium text-white" title={email}>
+            {firstNameFromEmail(email) ?? 'Signed in'}
           </p>
           <p className="text-xs text-zinc-400">{role === 'agent' ? 'Call-centre agent' : isAdmin ? 'Passenger · administrator' : 'Passenger'}</p>
         </div>
