@@ -65,7 +65,6 @@ export function Sidebar({
           <p className="truncate text-sm font-medium text-white" title={email}>
             {firstNameFromEmail(email) ?? 'Signed in'}
           </p>
-          <p className="text-xs text-zinc-400">{role === 'agent' ? 'Call-centre agent' : isAdmin ? 'Passenger · administrator' : 'Passenger'}</p>
         </div>
         <SignOutButton className="nav-link px-2" >
           <SignOutIcon />
