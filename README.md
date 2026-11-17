@@ -4,7 +4,7 @@
 
 A secure web chatbot that answers Kenya Airways policy questions (baggage, refunds, check-in, special assistance and more) using retrieval-augmented generation (RAG). It serves two audiences:
 
-- **Customers** get answers grounded only in KQ's public policies, with a source link on every answer.
+- **Customers** get answers grounded only in KQ's public policies. The answer itself doesn't mention sources; when the policies don't cover a question, the reply points to kenya-airways.com and the customer service number instead.
 - **Call-centre agents** get an agent mode that also searches internal handling procedures.
 
 Questions outside the policies are refused or handed off to KQ customer service, never guessed.
@@ -116,7 +116,7 @@ To apply migrations to the hosted project: `npx supabase login`, `npx supabase l
 4. Turn a follow-up into a standalone question for the search (`rewrite.ts`).
 5. Search the knowledge base twice, with the question and with it restated in the airline's policy wording, and take passages from each in turn, so the reworded search adds passages without pushing out what the question itself found. Both searches use the user's own session, so RLS decides what they can see (`retrieve.ts`, `rewrite.ts`).
 6. If no passage is similar enough, or a model check finds the passages don't actually answer the question, reply with the KQ contact details instead of generating an answer (`gate.ts`, `coverage.ts`, `contact.ts`). A staff passage reaching a customer is blocked the same way.
-7. Answer only from the passages and show their sources under the answer (`prompts.ts`, `answer.ts`). The answer and its sources are saved once it has finished; a failed answer is not saved.
+7. Answer only from the passages (`prompts.ts`, `answer.ts`). The answer and its sources are saved once it has finished; a failed answer is not saved. Agents see the sources under each answer; passengers don't, but Copy and shared links still include them.
 8. For agents, also write the **Customer-ready wording** in a separate call that only ever receives public passages (`wording.ts`), and save it with the answer.
 
 The similarity threshold in `lib/rag/config.ts` is chosen from the evaluation results. It only drops clearly unrelated passages; the coverage check makes the close calls, because questions the corpus doesn't cover can still score high similarity.
@@ -229,7 +229,7 @@ Security principles, the threat model and scan results live in [`docs/security/`
 
 ### Experience features (Phase 11)
 
-- **Answers:** Markdown for skimming, the exact source passage on request, suggested follow-up questions, a copyable summary when a question is escalated, Copy, and thumbs up or down with reasons (`message_feedback`).
+- **Answers:** Markdown for skimming, the exact source passage on request (agents), suggested follow-up questions, a copyable summary when a question is escalated, Copy, and thumbs up or down with reasons (`message_feedback`).
 - **History:** search across your own conversations (server-side, under RLS).
 - **Sharing:** passengers can share one question and answer as a read-only link (`/s/<id>`) that expires after 30 days and can be turned off in the chat or in Settings. Agents can't share.
 - **Display:** light or dark mode (follows the device by default) and text size, in Settings.

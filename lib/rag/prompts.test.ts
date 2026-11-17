@@ -42,8 +42,11 @@ test('sample staff procedures are labelled as samples', () => {
 
 test('customer escalation gives KQ contact details; agent escalation stays internal', () => {
   const contact = { phone: '+254 20 000 0000', url: 'https://www.kenya-airways.com/en-us/contact/' };
-  assert.match(escalationText('customer', contact), /\+254 20 000 0000, https:\/\/www\.kenya-airways\.com\/en-us\/contact\//);
-  assert.match(escalationText('customer', { ...contact, phone: null }), /customer service: https:/);
+  assert.match(escalationText('customer', contact), /visit https:\/\/www\.kenya-airways\.com\/en-us\/contact\/ or call Kenya Airways customer service on \+254 20 000 0000\./);
+  assert.match(escalationText('customer', { ...contact, phone: null }), /visit https:\S+ or contact Kenya Airways customer service\./);
+  for (const role of ['customer', 'agent'] as const) {
+    assert.doesNotMatch(escalationText(role, contact), /knowledge base/i);
+  }
   assert.doesNotMatch(escalationText('agent', contact), /\+254/);
 });
 

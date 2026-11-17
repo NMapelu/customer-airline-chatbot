@@ -142,7 +142,7 @@ export function TripChecklist() {
           {result.uncovered.length > 0 && (
             <div className="break-inside-avoid rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
               <h2 className="font-semibold">Check these with Kenya Airways</h2>
-              <p className="text-sm">I don&apos;t have these in my knowledge base:</p>
+              <p className="text-sm">Please confirm these on the Kenya Airways website or with customer service:</p>
               <ul className="ml-5 list-disc text-sm">
                 {result.uncovered.map((t) => (
                   <li key={t}>{t}</li>

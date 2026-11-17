@@ -232,7 +232,10 @@ export function Chat({ id, role, initialMessages }: { id: string; role: Role; in
                   We hid what looked like personal details in your message before processing it.
                 </p>
               )}
-              {m.metadata?.sources && m.metadata.sources.length > 0 && <SourceList sources={m.metadata.sources} role={role} />}
+              {/* Passengers get the answer only; agents see the sources with their Internal/Public labels. */}
+              {role === 'agent' && m.metadata?.sources && m.metadata.sources.length > 0 && (
+                <SourceList sources={m.metadata.sources} role={role} />
+              )}
               {role === 'agent' && m.role === 'assistant' && m.metadata?.customerWording !== undefined && (
                 <CustomerWording text={m.metadata.customerWording} />
               )}
