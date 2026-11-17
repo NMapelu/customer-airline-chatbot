@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
@@ -187,9 +187,30 @@ export function Chat({
   const [input, setInput] = useState('');
   const busy = status === 'submitted' || status === 'streaming';
 
+  // Keep the newest message in view: jump to the bottom when a conversation opens, and follow the
+  // answer as it arrives. If the reader has scrolled up to reread something, leave them there
+  // until they send the next question.
+  const scroller = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const lastRole = messages.at(-1)?.role;
+  useEffect(() => {
+    if (lastRole === 'user') following.current = true;
+  }, [messages.length, lastRole]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && following.current) el.scrollTop = el.scrollHeight;
+  }, [messages, status, error]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-6">
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="flex-1 space-y-5 overflow-y-auto px-4 py-6"
+      >
         {messages.length === 0 && (
           <div className="mx-auto mt-6 max-w-xl text-center sm:mt-16">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
