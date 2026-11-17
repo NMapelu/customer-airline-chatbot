@@ -55,7 +55,7 @@ export function Sidebar({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-[#2c2c33] pt-4">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your conversations</p>
-        <ConversationList conversations={conversations} />
+        <ConversationList conversations={conversations} canShare={role === 'customer'} />
       </div>
       <div className="flex items-center gap-2 border-t border-[#2c2c33] pt-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#c8102e] text-sm font-semibold text-white" aria-hidden="true">
