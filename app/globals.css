@@ -229,6 +229,42 @@ body {
     text-underline-offset: 2px;
   }
 
+  /* On/off switch (components/switch.tsx): grey when off, red when on. */
+  .switch {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    background: var(--line);
+    transition: background-color 150ms;
+  }
+  .switch-on {
+    background: var(--brand-solid);
+  }
+  .switch-locked {
+    cursor: not-allowed;
+  }
+  .switch:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .switch-thumb {
+    position: absolute;
+    top: 0.1875rem;
+    left: 0.1875rem;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 9999px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    transition: transform 150ms;
+  }
+  .switch-on .switch-thumb {
+    transform: translateX(1.25rem);
+  }
+
   .badge {
     display: inline-flex;
     align-items: center;
