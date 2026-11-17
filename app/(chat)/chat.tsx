@@ -374,14 +374,14 @@ export function Chat({
               {/* US-25: under the latest answer only; tapping one sends it as the next question. */}
               {role === 'customer' && index === messages.length - 1 && !busy && (m.metadata?.followUps?.length ?? 0) > 0 && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <p className="mb-2 text-xs font-semibold text-muted">You could also ask</p>
+                  <p className="mb-2 text-xs font-semibold text-ok">💡 You could also ask</p>
                   <div className="flex flex-wrap gap-2">
                   {m.metadata!.followUps!.map((q) => (
                     <button
                       key={q}
                       type="button"
                       onClick={() => sendMessage({ text: q })}
-                      className="chip"
+                      className="chip lift hover:border-[#15803d] hover:text-ok"
                     >
                       {q}
                     </button>
