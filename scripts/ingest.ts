@@ -83,6 +83,34 @@ function readDocuments(): KbDocument[] {
   return docs;
 }
 
+// Gemini accepts at most 100 texts per embedding request, and its free tier allows about 100 a
+// minute, so for Gemini the chunks go in batches of at most 100 and no more than 100 are sent in
+// any minute. OpenAI takes the whole document in one request, as before.
+const GEMINI_PER_MINUTE = 100;
+let windowStart = 0;
+let sentInWindow = 0;
+async function embedInBatches(model: Parameters<typeof embedMany>[0]['model'], values: string[], provider: AiProvider) {
+  if (provider !== 'google') return (await embedMany({ model, values })).embeddings;
+  const out: number[][] = [];
+  for (let i = 0; i < values.length; i += GEMINI_PER_MINUTE) {
+    const batch = values.slice(i, i + GEMINI_PER_MINUTE);
+    if (Date.now() - windowStart >= 60_000) {
+      windowStart = Date.now();
+      sentInWindow = 0;
+    } else if (sentInWindow + batch.length > GEMINI_PER_MINUTE) {
+      const wait = windowStart + 60_000 - Date.now();
+      console.log(`         waiting ${Math.ceil(wait / 1000)}s for Gemini's per-minute limit`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      windowStart = Date.now();
+      sentInWindow = 0;
+    }
+    sentInWindow += batch.length;
+    const { embeddings } = await embedMany({ model, values: batch, maxRetries: 3 });
+    out.push(...embeddings);
+  }
+  return out;
+}
+
 async function main() {
   // 1. Fetch KQ's pages. A failed fetch stops everything: loading a partial set would delete
   //    the missing pages from the database.
@@ -116,10 +144,11 @@ async function main() {
     const chunks = chunkMarkdown(doc.body);
     if (chunks.length === 0) fail(`${doc.audience}/${doc.slug} has no text to load.`);
     // The title and section go into the embedded text so a chunk can be found by topic.
-    const { embeddings } = await embedMany({
-      model: embeddingModel,
-      values: chunks.map((c) => `${doc.title}\n${c.content}`),
-    });
+    const embeddings = await embedInBatches(
+      embeddingModel,
+      chunks.map((c) => `${doc.title}\n${c.content}`),
+      env.AI_PROVIDER,
+    );
     const { error } = await supabase.rpc('replace_document_chunks', {
       p_slug: doc.slug,
       p_title: doc.title,
