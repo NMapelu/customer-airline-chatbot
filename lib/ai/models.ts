@@ -50,9 +50,10 @@ export type Models = {
 // Gemini 3 models always "think" before answering, and can't switch it off. These extra tokens let
 // the short checks (120 to 200 tokens) still finish their answer after thinking.
 const THINKING_ALLOWANCE = 1024;
-// When Gemini is busy it can take 30 seconds or more just to say no. Giving up after 20 seconds
-// keeps the wait short; each call is still retried twice before the chat says it can't answer.
-const REQUEST_TIMEOUT_MS = 20_000;
+// On the free tier Gemini sometimes takes 20 to 40 seconds to reply when it is busy. A timed-out
+// call is not retried, so the limit has to cover a slow reply: 20 seconds made the live chat refuse
+// every question on 12 November 2026. After 45 seconds the chat says it can't answer right now.
+export const REQUEST_TIMEOUT_MS = 45_000;
 
 // Adjusts each request to Gemini's OpenAI-compatible API: the least thinking for answers and checks,
 // with room for it in the token limit, and 1536 numbers per embedding. If a longer
