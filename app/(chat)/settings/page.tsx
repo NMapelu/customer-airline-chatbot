@@ -4,13 +4,11 @@ import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Switch } from '@/components/switch';
 import { appearanceFrom } from '@/lib/appearance';
-import { listShares } from '@/lib/chat/shares';
 import { requireAal2 } from '@/lib/supabase/server';
 import { SignOutButton } from '../../(auth)/sign-out-button';
 import { AppearanceSettings } from './appearance';
 import { DeleteAccount } from './delete-account';
 import { ReplaceAuthenticator } from './replace-authenticator';
-import { SharedLinks } from './shared-links';
 
 export const metadata: Metadata = { title: 'Settings · KQ Chatbot' };
 
@@ -30,8 +28,7 @@ function Section({ title, description, tone, children }: { title: string; descri
 
 // Account and security settings (overview §7.4), and account deletion (§11).
 export default async function SettingsPage() {
-  const { supabase, user, role } = await requireAal2();
-  const shares = role === 'agent' ? [] : await listShares(supabase);
+  const { user, role } = await requireAal2();
   const authenticators = (user.factors ?? []).filter((f) => f.factor_type === 'totp' && f.status === 'verified');
 
   return (
@@ -69,15 +66,6 @@ export default async function SettingsPage() {
           />
           <ReplaceAuthenticator />
         </Section>
-
-        {role !== 'agent' && (
-          <Section
-            title="Shared answers"
-            description="Links you shared stop working after 30 days, or straight away when you stop sharing them."
-          >
-            <SharedLinks shares={shares} />
-          </Section>
-        )}
 
         <Section
           title="Delete my account"
