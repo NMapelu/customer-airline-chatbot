@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Brand } from '@/components/brand';
-import { ChartIcon, PlusIcon, SettingsIcon, SignOutIcon } from '@/components/icons';
+import { ChartIcon, PlusIcon, SignOutIcon, UserIcon } from '@/components/icons';
 import type { ConversationSummary } from '@/lib/chat/history';
 import { firstNameFromEmail } from '@/lib/profile/first-name';
 import type { Role } from '@/lib/rag/types';
@@ -44,8 +44,8 @@ export function Sidebar({
         New chat
       </Link>
       <div className="space-y-1">
-        <NavLink href="/settings" icon={<SettingsIcon />}>
-          Settings
+        <NavLink href="/settings" icon={<UserIcon />}>
+          View profile
         </NavLink>
         {isAdmin && (
           <NavLink href="/admin" icon={<ChartIcon />}>
