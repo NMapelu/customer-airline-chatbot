@@ -4,8 +4,9 @@ import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { FEEDBACK_REASONS, type FeedbackReason } from '@/lib/chat/feedback';
 import { getInsights } from '@/lib/admin/insights';
-import { requireAal2 } from '@/lib/supabase/server';
 import { AnswerText } from '../answer-text';
+import { requireAdmin } from './admin';
+import { AdminTabs } from './admin-tabs';
 
 export const metadata: Metadata = { title: 'Insights · KQ Chatbot', robots: { index: false, follow: false } };
 
@@ -37,8 +38,7 @@ function Panel({ title, description, children }: { title: string; description?: 
 // 404, and the database refuses them too. Each visit is written to the audit log by the database.
 // It shows no user emails or ids, and only monthly totals for anything older than 30 days.
 export default async function AdminPage() {
-  const { supabase, user } = await requireAal2();
-  if (user.app_metadata?.role !== 'admin') notFound();
+  const { supabase } = await requireAdmin();
   const insights = await getInsights(supabase);
   if (!insights) notFound();
 
@@ -56,6 +56,7 @@ export default async function AdminPage() {
         title="Insights"
         description="Last 30 days unless marked. Questions are shown as users typed them, with personal details masked. This visit is recorded in the audit log."
       />
+      <AdminTabs current="/admin" />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Replies">
         <Stat label="Questions" value={daily.reduce((n, d) => n + d.questions, 0)} />

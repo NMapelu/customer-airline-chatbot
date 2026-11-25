@@ -49,7 +49,7 @@ export function Sidebar({
         </NavLink>
         {isAdmin && (
           <NavLink href="/admin" icon={<ChartIcon />}>
-            Insights
+            Admin
           </NavLink>
         )}
       </div>
