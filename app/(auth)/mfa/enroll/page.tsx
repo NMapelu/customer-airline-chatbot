@@ -35,7 +35,7 @@ export default function EnrolPage() {
         <form action={action} className="space-y-4">
           <QrCode qr={start.qr} secret={start.secret} />
           <input type="hidden" name="factorId" value={start.factorId} />
-          <Field label="6-digit code from the app" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+          <Field label="6-digit code from the app" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" type="password" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
           <FormError message={state?.error} />
           <Submit pending={pending}>Finish setup</Submit>
         </form>
