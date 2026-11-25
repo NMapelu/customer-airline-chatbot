@@ -31,7 +31,7 @@ Next.js 16 · React 19 · Tailwind CSS 4 · Vercel AI SDK · Google Gemini (gemi
 
 ## Release
 
-The live site runs the release tagged **`v1.0.0`**, built from `main` (see [Deployment](#deployment)). The evaluation figures in `eval/report.md` were measured on 21 October 2026 with OpenAI GPT-4o, before the switch to Gemini; the Random Forest's own results are in [`notebooks/`](notebooks/).
+The live site runs the release tagged **`v1.0.0`**, built from `main` (see [Deployment](#deployment)). The evaluation figures in `eval/report.md` were measured on 21 October 2026 with OpenAI GPT-4o, before the switch to Gemini; the runs on the deployed Gemini version are in [`eval/gemini/`](eval/gemini/); the Random Forest's own results are in [`notebooks/`](notebooks/).
 
 ## Getting started
 
@@ -208,7 +208,7 @@ Sign-up and password-reset emails need a custom SMTP sender in the Supabase dash
 - [OWASP Top 10 and LLM Top 10 review](docs/security/owasp-review.md)
 - [Success criteria with evidence](docs/success-criteria.md)
 - [Threat model](docs/security/threat-model.md)
-- [Evaluation report](eval/report.md)
+- [Evaluation report](eval/report.md) (GPT-4o) and [runs on the deployed Gemini version](eval/gemini/README.md)
 
 ## Project management
 
