@@ -53,4 +53,8 @@ docs/public/*
 !docs/public/.gitkeep
 
 # Full evaluation answers (can quote KQ text)
-eval/results.jsonl
+eval/results*.jsonl
+
+# python
+__pycache__/
+*.pyc
