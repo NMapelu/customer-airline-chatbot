@@ -234,6 +234,10 @@ Security principles, the threat model and scan results live in [`docs/security/`
 - **Sharing:** passengers can share one question and answer as a read-only link (`/s/<id>`) that expires after 30 days and can be turned off in the chat or in Settings. Agents can't share.
 - **Display:** light or dark mode (follows the device by default) and text size, in Settings.
 - **Insights** (`/admin`, administrators): question volume, answer, escalation and refusal rates, most-cited documents, knowledge gaps and recent thumbs-down answers. No emails or ids; detail only for the last 30 days; each visit is audit-logged. Give the role with `npm run set-admin -- <email>`, then sign in again.
+- **Agents** (`/admin/agents`, administrators): the agents and when they last signed in, invitations, and deactivation. An invited person signs up on the normal sign-up page with that email within 7 days and gets the agent role from the start; an email that already has an account can't be invited. The scripts below still work too.
+- **Passenger accounts** (`/admin/passengers`, administrators): find an account by email (at least 3 characters, never a full list, never its conversations) to suspend, restore or delete it.
+- **Audit log** (`/admin/audit`, administrators): security events by date and type, with emails masked, and a CSV download of up to 5,000 rows. Reading or downloading it is logged.
+- Every change on these pages needs an authenticator code from the last 5 minutes, and the database checks that the caller's account is an administrator right now (`supabase/migrations/20261126090000_admin_accounts.sql`).
 
 ## Authorship
 
