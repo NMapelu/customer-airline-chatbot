@@ -12,7 +12,7 @@ export default function VerifyPage() {
     <div className="space-y-4">
       <form action={action} className="space-y-4">
         <FormTitle title="Enter your code">Open your authenticator app and enter the 6-digit code for KQ Chatbot.</FormTitle>
-        <Field label="6-digit code" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus />
+        <Field label="6-digit code" name="code" className="input mt-1.5 text-center font-mono text-lg tracking-[0.4em]" type="password" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus />
         <FormError message={state?.error} />
         <Submit pending={pending}>Verify</Submit>
       </form>

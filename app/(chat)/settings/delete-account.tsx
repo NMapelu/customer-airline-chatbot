@@ -13,7 +13,7 @@ export function DeleteAccount() {
         Deletes your account and all your conversations straight away. This can&apos;t be undone. A record that an account
         was deleted is kept for 12 months, without your email address.
       </p>
-      <Field label="Code from your authenticator app" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
+      <Field label="Code from your authenticator app" name="code" type="password" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required />
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="confirm" required className="mt-1 accent-[#c8102e]" />
         <span>I understand my account and conversations will be deleted permanently.</span>
