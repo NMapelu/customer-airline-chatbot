@@ -92,7 +92,7 @@ export async function deactivateAgent(admin: SupabaseClient, email: string): Pro
   const user = await findUserByEmail(admin, email);
   if (!user) throw new Error('no account with this email.');
   if (!isAgent(user)) throw new Error('this is not an agent account, so there is nothing to deactivate.');
-  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: { role: null }, ban_duration: BAN_FOREVER });
+  const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata: { role: null, former_agent: true }, ban_duration: BAN_FOREVER });
   if (error) throw new Error(`could not deactivate the account: ${error.message}`);
   await auditAdmin(admin, user.id, 'agent_deactivated', 'admin script');
   return user.id;
